@@ -1,6 +1,7 @@
 package tasks_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/timb418/systemdesign-trainer/internal/tasks"
@@ -25,9 +26,11 @@ func TestLoadEmbeddedBank(t *testing.T) {
 	if task.Canvas != "blank" || task.Difficulty != 1 {
 		t.Fatalf("unexpected task: %+v", task)
 	}
-	facts := task.Reveal("qps")
-	if facts == "" || facts == "По этой теме в карточке нет заранее заданных фактов. Не выдумывай цифры." {
-		t.Fatalf("reveal scale: %q", facts)
+	for _, topic := range []string{"qps", "scale", "сколько пользователей"} {
+		facts := task.Reveal(topic)
+		if !strings.Contains(facts, "20k QPS") {
+			t.Fatalf("reveal %q: %q", topic, facts)
+		}
 	}
 	if _, err := bank.ReadDiagram(task.PreferredSolution.Diagram); err != nil {
 		t.Fatal(err)
