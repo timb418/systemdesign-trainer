@@ -98,6 +98,20 @@ func mustGet(t *testing.T, c *http.Client, u string) io.ReadCloser {
 	return res.Body
 }
 
+func TestSettingsDefaultModels(t *testing.T) {
+	h := testServer(t)
+	ts := httptest.NewServer(h)
+	t.Cleanup(ts.Close)
+	body, _ := io.ReadAll(mustGet(t, ts.Client(), ts.URL+"/settings"))
+	html := string(body)
+	if !strings.Contains(html, settings.DefaultInterviewerModel) {
+		t.Fatalf("settings page missing default model %q: %s", settings.DefaultInterviewerModel, html)
+	}
+	if !strings.Contains(html, "CoreWeave") || !strings.Contains(html, "DeepInfra") {
+		t.Fatalf("settings page missing provider hint: %s", html)
+	}
+}
+
 func TestSettingsMasksKey(t *testing.T) {
 	h := testServer(t)
 	ts := httptest.NewServer(h)

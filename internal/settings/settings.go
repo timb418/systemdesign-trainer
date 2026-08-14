@@ -10,11 +10,14 @@ import (
 )
 
 const (
-	DefaultInterviewerModel = "openai/gpt-4o-mini"
-	DefaultEvaluatorModel   = "openai/gpt-4o"
+	DefaultInterviewerModel = "deepseek/deepseek-v4-flash-0731"
+	DefaultEvaluatorModel   = "deepseek/deepseek-v4-flash-0731"
 	DefaultTimerMinutes     = 45
 	OpenRouterBaseURL       = "https://openrouter.ai/api/v1"
 )
+
+// DefaultProviderOrder is OpenRouter provider.order: try these slugs first, then other hosts of the same model.
+var DefaultProviderOrder = []string{"coreweave", "streamlake", "decart", "deepinfra"}
 
 type Settings struct {
 	InterviewerModel string `json:"interviewer_model"`

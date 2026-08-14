@@ -56,6 +56,10 @@ func (a *Agents) model(ctx context.Context, modelID, apiKey string) (model.LLM, 
 		Options: []option.RequestOption{
 			option.WithHeader("HTTP-Referer", "http://127.0.0.1:8080"),
 			option.WithHeader("X-Title", "System Design Trainer"),
+			option.WithJSONSet("provider", map[string]any{
+				"order":           settings.DefaultProviderOrder,
+				"allow_fallbacks": true,
+			}),
 		},
 	})
 }
