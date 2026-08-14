@@ -28,7 +28,7 @@ func (m Mode) Label() string {
 	case ModeFullMock:
 		return "Полный mock"
 	case ModeDrill:
-		return "Дрилл по типу"
+		return "Практика паттерна"
 	case ModeRequirements:
 		return "Только требования"
 	case ModeCompareGold:

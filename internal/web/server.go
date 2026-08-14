@@ -259,7 +259,7 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if mode == store.ModeCompareGold && !s.store.HasCompleted(r.Context(), taskID) {
-		http.Redirect(w, r, "/tasks/"+taskID+"?err="+urlQuery("сначала завершите mock или дрилл"), http.StatusSeeOther)
+		http.Redirect(w, r, "/tasks/"+taskID+"?err="+urlQuery("сначала завершите mock или практику паттерна"), http.StatusSeeOther)
 		return
 	}
 	cfg, _ := s.set.Load()

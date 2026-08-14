@@ -389,7 +389,7 @@ func interviewerInstruction(t tasks.Task, mode store.Mode) string {
 	case store.ModeRequirements:
 		s += "\nСейчас режим только уточнения требований. Не требуй схему. Когда кандидат зафиксировал scope — коротко подведи и остановись."
 	case store.ModeDrill:
-		s += "\nРежим дрилла: уже фокус на паттерне этого типа. Deep dive уже и короче, в «фирменное» узкое место."
+		s += "\nРежим практики паттерна: уже фокус на паттерне этого типа. Deep dive уже и короче, в «фирменное» узкое место."
 	}
 	return s + rules.String()
 }

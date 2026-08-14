@@ -14,12 +14,12 @@
     <label>Режим
       <select name="mode">
         <option value="full_mock">Полный mock</option>
-        <option value="drill">Дрилл по типу</option>
+        <option value="drill">Практика паттерна</option>
         <option value="requirements_only">Только уточнение требований</option>
         <option value="compare_gold" {{if not .CanCompare}}disabled{{end}}>Сравнение с эталоном</option>
       </select>
     </label>
-    {{if not .CanCompare}}<p class="hint">Сравнение с эталоном откроется после завершённого mock или дрилла.</p>{{end}}
+    {{if not .CanCompare}}<p class="hint">Сравнение с эталоном откроется после завершённого mock или практики паттерна.</p>{{end}}
     <button type="submit">Начать сессию</button>
   </form>
 </article>
