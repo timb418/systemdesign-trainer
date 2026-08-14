@@ -163,6 +163,10 @@ CREATE TABLE IF NOT EXISTS rubrics (
   json TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS solved_tasks (
+  task_id TEXT PRIMARY KEY,
+  solved_at TEXT NOT NULL
+);
 `)
 	return err
 }
@@ -272,6 +276,41 @@ func (s *Store) HasCompleted(ctx context.Context, taskID string) bool {
 	_ = s.db.QueryRowContext(ctx, `
 SELECT COUNT(1) FROM sessions WHERE task_id = ? AND status = ? AND mode IN (?, ?)`,
 		taskID, StatusCompleted, ModeFullMock, ModeDrill).Scan(&n)
+	return n > 0
+}
+
+func (s *Store) SetSolved(ctx context.Context, taskID string, solved bool) error {
+	if !solved {
+		_, err := s.db.ExecContext(ctx, `DELETE FROM solved_tasks WHERE task_id = ?`, taskID)
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO solved_tasks (task_id, solved_at) VALUES (?, ?)
+ON CONFLICT(task_id) DO NOTHING`,
+		taskID, time.Now().UTC().Format(time.RFC3339Nano))
+	return err
+}
+
+func (s *Store) SolvedSet(ctx context.Context) (map[string]struct{}, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT task_id FROM solved_tasks`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]struct{}{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out[id] = struct{}{}
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) IsSolved(ctx context.Context, taskID string) bool {
+	var n int
+	_ = s.db.QueryRowContext(ctx, `SELECT COUNT(1) FROM solved_tasks WHERE task_id = ?`, taskID).Scan(&n)
 	return n > 0
 }
 

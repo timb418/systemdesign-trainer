@@ -280,3 +280,52 @@ func TestGoldDiagramOnComparePage(t *testing.T) {
 		t.Fatalf("compare page missing candidate iframe: %s", page)
 	}
 }
+
+func TestMarkTaskSolved(t *testing.T) {
+	h := testServer(t)
+	ts := httptest.NewServer(h)
+	t.Cleanup(ts.Close)
+	client := ts.Client()
+
+	catalog, _ := io.ReadAll(mustGet(t, client, ts.URL+"/"))
+	if strings.Contains(string(catalog), `class="card is-solved"`) {
+		t.Fatal("catalog should start without solved cards")
+	}
+	if !strings.Contains(string(catalog), "Пометить как решённая") {
+		t.Fatalf("catalog missing mark button: %s", catalog)
+	}
+
+	form := url.Values{"next": {"/"}}
+	res, err := client.PostForm(ts.URL+"/tasks/url-shortener-v1/solved", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	html := string(body)
+	if res.StatusCode != 200 {
+		t.Fatalf("mark %d %s", res.StatusCode, html)
+	}
+	if !strings.Contains(html, `class="card is-solved"`) {
+		t.Fatalf("catalog missing solved class: %s", html)
+	}
+	if !strings.Contains(html, "Снять отметку") || !strings.Contains(html, `<span class="badge">решена</span>`) {
+		t.Fatalf("catalog missing solved UI: %s", html)
+	}
+
+	taskPage, _ := io.ReadAll(mustGet(t, client, ts.URL+"/tasks/url-shortener-v1"))
+	if !strings.Contains(string(taskPage), "Снять отметку") {
+		t.Fatalf("task page missing unmark: %s", taskPage)
+	}
+
+	res, err = client.PostForm(ts.URL+"/tasks/url-shortener-v1/solved", url.Values{"next": {"/"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ = io.ReadAll(res.Body)
+	res.Body.Close()
+	html = string(body)
+	if strings.Contains(html, `class="card is-solved"`) {
+		t.Fatalf("catalog still marked after unmark: %s", html)
+	}
+}

@@ -2,6 +2,7 @@
 <section class="hero">
   <h1>Каталог задач</h1>
   <p>Выберите тип архитектуры и сложность. Банк пока учебный: одна карточка, чтобы прогнать интерфейс.</p>
+  <p class="meta">Решено {{.SolvedCount}} из {{.TaskCount}}</p>
 </section>
 <form class="filters" method="get" action="/">
   <label>Тип
@@ -20,16 +21,27 @@
       {{end}}
     </select>
   </label>
+  <label>Статус
+    <select name="status">
+      <option value="">все</option>
+      <option value="open" {{if eq .StatusFilter "open"}}selected{{end}}>нерешённые</option>
+      <option value="solved" {{if eq .StatusFilter "solved"}}selected{{end}}>решённые</option>
+    </select>
+  </label>
   <button type="submit">Показать</button>
 </form>
 {{if .Tasks}}
 <ul class="cards">
   {{range .Tasks}}
-  <li>
+  <li class="card{{if .Solved}} is-solved{{end}}">
     <a href="/tasks/{{.ID}}">
-      <strong>{{.Title}}</strong>
+      <strong>{{.Title}}{{if .Solved}} <span class="badge">решена</span>{{end}}</strong>
       <span class="meta">сложность {{.Difficulty}} · {{.DurationMin}} мин · {{join .TypeNames ", "}}</span>
     </a>
+    <form method="post" action="/tasks/{{.ID}}/solved">
+      <input type="hidden" name="next" value="{{$.CatalogNext}}">
+      <button type="submit" class="secondary">{{if .Solved}}Снять отметку{{else}}Пометить как решённая{{end}}</button>
+    </form>
   </li>
   {{end}}
 </ul>

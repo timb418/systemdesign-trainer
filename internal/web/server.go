@@ -11,8 +11,10 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -60,6 +62,7 @@ func (s *Server) Handler() http.Handler {
 	}
 	mux.HandleFunc("GET /{$}", s.catalog)
 	mux.HandleFunc("GET /tasks/{id}", s.task)
+	mux.HandleFunc("POST /tasks/{id}/solved", s.toggleSolved)
 	mux.HandleFunc("POST /sessions", s.startSession)
 	mux.HandleFunc("GET /sessions/{id}", s.showSession)
 	mux.HandleFunc("GET /sessions/{id}/board.xml", s.boardXML)
@@ -112,20 +115,110 @@ type page struct {
 	Title string
 }
 
+type catalogItem struct {
+	tasks.PublicTask
+	Solved bool
+}
+
 func (s *Server) catalog(w http.ResponseWriter, r *http.Request) {
 	typeID := r.URL.Query().Get("type")
 	diff := 0
 	if v := r.URL.Query().Get("difficulty"); v != "" {
 		diff, _ = strconv.Atoi(v)
 	}
+	status := r.URL.Query().Get("status")
+	if status != "open" && status != "solved" {
+		status = ""
+	}
+	solved, err := s.store.SolvedSet(r.Context())
+	if err != nil {
+		s.fail(w, 500, err.Error())
+		return
+	}
+	public := s.bank.PublicList(typeID, diff)
+	items := make([]catalogItem, 0, len(public))
+	solvedCount := 0
+	for _, p := range public {
+		_, ok := solved[p.ID]
+		if ok {
+			solvedCount++
+		}
+		items = append(items, catalogItem{PublicTask: p, Solved: ok})
+	}
+	taskCount := len(items)
+	if status == "open" || status == "solved" {
+		filtered := make([]catalogItem, 0, len(items))
+		want := status == "solved"
+		for _, it := range items {
+			if it.Solved == want {
+				filtered = append(filtered, it)
+			}
+		}
+		items = filtered
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].Solved != items[j].Solved {
+			return !items[i].Solved
+		}
+		return false
+	})
 	s.render(w, "catalog.html", map[string]any{
 		"Title":        "Каталог",
 		"Types":        s.bank.Types(),
-		"Tasks":        s.bank.PublicList(typeID, diff),
+		"Tasks":        items,
 		"TypeFilter":   typeID,
 		"DiffFilter":   diff,
+		"StatusFilter": status,
 		"Difficulties": []int{1, 2, 3, 4, 5},
+		"SolvedCount":  solvedCount,
+		"TaskCount":    taskCount,
+		"CatalogNext":  catalogNext(typeID, diff, status),
 	})
+}
+
+func catalogNext(typeID string, diff int, status string) string {
+	q := url.Values{}
+	if typeID != "" {
+		q.Set("type", typeID)
+	}
+	if diff != 0 {
+		q.Set("difficulty", strconv.Itoa(diff))
+	}
+	if status != "" {
+		q.Set("status", status)
+	}
+	if enc := q.Encode(); enc != "" {
+		return "/?" + enc
+	}
+	return "/"
+}
+
+func safeNext(next string) string {
+	if next == "" || strings.Contains(next, "://") || strings.HasPrefix(next, "//") || strings.Contains(next, "\\") {
+		return "/"
+	}
+	if next == "/" || strings.HasPrefix(next, "/?") || strings.HasPrefix(next, "/tasks/") {
+		return next
+	}
+	return "/"
+}
+
+func (s *Server) toggleSolved(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, 400, "некорректная форма")
+		return
+	}
+	id := r.PathValue("id")
+	if _, ok := s.bank.Get(id); !ok {
+		s.fail(w, 404, "задача не найдена")
+		return
+	}
+	solved := s.store.IsSolved(r.Context(), id)
+	if err := s.store.SetSolved(r.Context(), id, !solved); err != nil {
+		s.fail(w, 500, err.Error())
+		return
+	}
+	http.Redirect(w, r, safeNext(r.FormValue("next")), http.StatusSeeOther)
 }
 
 func (s *Server) task(w http.ResponseWriter, r *http.Request) {
@@ -144,6 +237,7 @@ func (s *Server) task(w http.ResponseWriter, r *http.Request) {
 		"Task":       t.Public(),
 		"TypeNames":  names,
 		"CanCompare": s.store.HasCompleted(r.Context(), t.ID),
+		"Solved":     s.store.IsSolved(r.Context(), t.ID),
 		"Err":        r.URL.Query().Get("err"),
 	})
 }

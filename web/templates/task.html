@@ -1,8 +1,12 @@
 {{define "content"}}
 <article class="task">
   <p class="crumb"><a href="/">Каталог</a></p>
-  <h1>{{.Task.Title}}</h1>
+  <h1>{{.Task.Title}}{{if .Solved}} <span class="badge">решена</span>{{end}}</h1>
   <p class="meta">сложность {{.Task.Difficulty}} · {{.Task.DurationMin}} мин · {{join .TypeNames ", "}} · доска: {{if eq .Task.Canvas "sketch"}}набросок{{else}}пустая{{end}}</p>
+  <form class="solve-form" method="post" action="/tasks/{{.Task.ID}}/solved">
+    <input type="hidden" name="next" value="/tasks/{{.Task.ID}}">
+    <button type="submit" class="secondary">{{if .Solved}}Снять отметку{{else}}Пометить как решённая{{end}}</button>
+  </form>
   <p>Публичное описание скрывает полное ТЗ — как на собесе. Интервьюер начнёт с неполного брифа.</p>
   {{if .Err}}<p class="flash error">{{.Err}}</p>{{end}}
   <form class="start" method="post" action="/sessions">

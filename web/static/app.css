@@ -26,9 +26,39 @@ input, select, textarea, button, .btn {
   font: inherit; padding: 0.45rem 0.7rem; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink);
 }
 button, .btn { background: var(--accent); color: #fff; border-color: var(--accent); text-decoration: none; display: inline-block; cursor: pointer; }
+button.secondary {
+  background: var(--card);
+  color: var(--ink);
+  border-color: var(--line);
+}
+button.secondary:hover { border-color: var(--accent); color: var(--accent); }
+.badge {
+  display: inline-block;
+  margin-left: 0.15rem;
+  padding: 0.05rem 0.45rem;
+  font-size: 0.75rem;
+  font-family: inherit;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--accent);
+  background: var(--user);
+  border-radius: 999px;
+  vertical-align: middle;
+}
+.solve-form { margin: 0.75rem 0 1rem; }
 .cards { list-style: none; padding: 0; display: grid; gap: 0.75rem; }
-.cards a { display: block; padding: 1rem 1.1rem; background: var(--card); border: 1px solid var(--line); border-radius: 8px; text-decoration: none; color: inherit; }
-.cards a:hover { border-color: var(--accent); }
+.cards li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.cards li:hover { border-color: var(--accent); }
+.cards li.is-solved { opacity: 0.78; }
+.cards a { display: block; flex: 1; padding: 1rem 1.1rem; text-decoration: none; color: inherit; }
+.cards form { flex-shrink: 0; margin: 0 0.85rem 0 0; }
 .cards .meta { display: block; margin-top: 0.25rem; font-size: 0.9rem; }
 .flash { padding: 0.6rem 0.8rem; background: #e7f4ee; border-radius: 6px; }
 .flash.error { background: #fde8e8; color: var(--danger); }
