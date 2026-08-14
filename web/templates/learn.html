@@ -1,0 +1,64 @@
+{{define "content"}}
+<section class="hero">
+  <h1>Обучение system design</h1>
+  <p>Решайте те же задачи по этапам. Наставник сначала задаёт наводящие вопросы, а эталон открывается только после вашей рефлексии.</p>
+</section>
+
+<nav class="track-tabs" aria-label="Учебные треки">
+  {{range .Tracks}}
+  <a class="{{if eq $.Track.ID .ID}}active{{end}}" href="/learn/{{.ID}}">{{.Title}}</a>
+  {{end}}
+</nav>
+
+<section class="learning-track">
+  <h2>{{.Track.Title}}</h2>
+  <p class="meta">{{.Track.Description}}</p>
+  {{if .Track.Prerequisites}}<p class="hint">Рекомендуется после: {{join .Track.Prerequisites ", "}}</p>{{end}}
+  {{if .Prerequisite}}
+  <aside class="prerequisite-card">
+    <div>
+      <strong>Сначала prerequisite: {{.Prerequisite.Title}}</strong>
+      <span class="meta">этапов {{.Prerequisite.CompletedPhases}}/6</span>
+    </div>
+    {{if .Prerequisite.SessionID}}
+    <a class="btn" href="/sessions/{{.Prerequisite.SessionID}}">Продолжить</a>
+    {{else}}
+    <form method="post" action="/sessions">
+      <input type="hidden" name="task_id" value="{{.Prerequisite.ID}}">
+      <input type="hidden" name="mode" value="learning">
+      <button type="submit">Начать</button>
+    </form>
+    {{end}}
+  </aside>
+  {{end}}
+  <ol class="learning-list">
+    {{range .Track.Tasks}}
+    <li class="{{if .Done}}done{{end}}">
+      <div>
+        <strong>{{.Title}}{{if .Recommended}} <span class="badge">следующая</span>{{end}}</strong>
+        <span class="meta">сложность {{.Difficulty}} · {{join .TypeNames ", "}} · этапов {{.CompletedPhases}}/6</span>
+      </div>
+      {{if and .SessionID (not .Done)}}
+      <a class="btn" href="/sessions/{{.SessionID}}">Продолжить</a>
+      {{else}}
+      <form method="post" action="/sessions">
+        <input type="hidden" name="task_id" value="{{.ID}}">
+        <input type="hidden" name="mode" value="learning">
+        <button type="submit">{{if .Done}}Повторить{{else}}Начать{{end}}</button>
+      </form>
+      {{end}}
+    </li>
+    {{end}}
+  </ol>
+  {{if .Mastery}}
+  <section class="mastery">
+    <h3>Освоение концепций</h3>
+    <ul>
+      {{range .Mastery}}
+      <li><strong>{{.Title}}</strong><span class="meta">самостоятельно {{.Independent}} из {{.Practiced}} этапов</span></li>
+      {{end}}
+    </ul>
+  </section>
+  {{end}}
+</section>
+{{end}}

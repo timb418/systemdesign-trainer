@@ -1,0 +1,95 @@
+concepts:
+  - id: requirements
+    title: Требования и scope
+    summary: Отделение пользовательских сценариев от ограничений и осознанное сужение первой версии.
+  - id: estimation
+    title: Оценка нагрузки
+    summary: Расчёт порядка QPS, трафика и хранения из нескольких исходных величин.
+  - id: caching
+    title: Кэширование
+    summary: Ускорение чтения ценой инвалидации, дополнительного состояния и риска устаревших данных.
+  - id: partitioning
+    title: Партиционирование
+    summary: Разделение данных и нагрузки между узлами с явным ключом и стратегией ребалансировки.
+  - id: replication
+    title: Репликация
+    summary: Копии данных для доступности и чтения с компромиссом по согласованности.
+  - id: async
+    title: Асинхронная обработка
+    summary: Развязка компонентов очередью, backpressure и повторная обработка сообщений.
+  - id: reliability
+    title: Отказоустойчивость
+    summary: Явное поведение системы при частичных отказах, таймаутах и повторных запросах.
+  - id: consistency
+    title: Согласованность
+    summary: Выбор гарантий чтения и записи в соответствии с требованиями конкретного сценария.
+  - id: idempotency
+    title: Идемпотентность
+    summary: Безопасное повторение операции без дублирования пользовательского эффекта.
+
+tracks:
+  - id: foundations
+    title: Основы system design
+    description: От требований и оценки нагрузки к кэшу, хранению, очередям и отказоустойчивости.
+    tasks:
+      - url-shortener-v1
+      - lru-cache
+      - single-node-key-value-store
+      - rate-limiter-single-node
+      - basic-message-queue
+      - distributed-cache-cluster
+      - sharded-key-value-store
+      - rate-limiter-distributed
+      - idempotent-checkout
+  - id: messaging
+    title: Чаты и доставка событий
+    description: Доставка сообщений, presence, группы и несколько устройств.
+    prerequisites: [foundations]
+    tasks:
+      - direct-messenger
+      - presence-service
+      - group-chat
+      - multi-device-messenger
+      - enterprise-chat
+  - id: evolution
+    title: Эволюция нагруженных систем
+    description: Задачи со стартовым наброском, конфликтными NFR и миграциями.
+    prerequisites: [foundations]
+    tasks:
+      - rate-limiter-adaptive
+      - massive-notification-fanout
+      - celebrity-feed
+      - exactly-once-workflow
+      - object-storage-s3
+      - payment-processing-platform
+
+tasks:
+  - task_id: url-shortener-v1
+    concepts: [requirements, estimation, caching, partitioning]
+    objectives:
+      - Перевести DAU и долю создающих ссылки пользователей в read/write QPS.
+      - Разделить путь создания короткой ссылки и горячий путь редиректа.
+      - Обосновать генерацию идентификатора, хранение и кэширование.
+    common_mistakes:
+      - Начинать с выбора базы до фиксации read/write ratio.
+      - Считать коллизии решёнными без описания генерации ключа.
+  - task_id: basic-message-queue
+    concepts: [requirements, estimation, async, reliability]
+    prerequisites: [url-shortener-v1]
+    objectives:
+      - Определить семантику доставки и порядок сообщений.
+      - Спроектировать publish, storage, consume и acknowledgement.
+      - Разобрать retry, dead-letter queue и backpressure.
+    common_mistakes:
+      - Обещать exactly-once без ограничений и цены.
+      - Не определить момент удаления сообщения.
+  - task_id: rate-limiter-adaptive
+    concepts: [estimation, caching, replication, consistency, reliability]
+    prerequisites: [rate-limiter-distributed]
+    objectives:
+      - Прочитать стартовую архитектуру и найти источник несогласованности.
+      - Выбрать границы локальных и глобальных лимитов.
+      - Спланировать безопасное внедрение адаптивной политики.
+    common_mistakes:
+      - Пытаться сделать глобальный счётчик строго согласованным на каждом запросе.
+      - Не предусмотреть поведение при недоступности control plane.

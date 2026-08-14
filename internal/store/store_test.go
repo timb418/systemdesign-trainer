@@ -83,3 +83,42 @@ func TestSolvedToggle(t *testing.T) {
 		t.Fatalf("empty set %+v %v", set, err)
 	}
 }
+
+func TestLearningProgressRoundtrip(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "learning.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	ctx := context.Background()
+	sess, err := st.CreateSession(ctx, "url-shortener-v1", store.ModeLearning, false, 45)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.CreateLearningState(ctx, sess.ID, "orientation"); err != nil {
+		t.Fatal(err)
+	}
+	state, err := st.IncreaseLearningHint(ctx, sess.ID, 4)
+	if err != nil || state.HintLevel != 1 {
+		t.Fatalf("hint state %+v err=%v", state, err)
+	}
+	if err := st.AdvanceLearningPhase(ctx, sess.ID, "orientation", "requirements"); err != nil {
+		t.Fatal(err)
+	}
+	state, err = st.GetLearningState(ctx, sess.ID)
+	if err != nil || state.Phase != "requirements" || state.HintLevel != 0 {
+		t.Fatalf("advanced state %+v err=%v", state, err)
+	}
+	assistance, err := st.LearningPhaseAssistance(ctx, sess.ID)
+	if err != nil || assistance["orientation"] != "hinted" {
+		t.Fatalf("assistance %+v err=%v", assistance, err)
+	}
+	progress, err := st.LearningProgress(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := progress["url-shortener-v1"]
+	if got.SessionID != sess.ID || got.CurrentPhase != "requirements" || got.CompletedPhases != 1 {
+		t.Fatalf("progress %+v", got)
+	}
+}

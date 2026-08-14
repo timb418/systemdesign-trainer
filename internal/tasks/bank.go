@@ -11,9 +11,10 @@ import (
 )
 
 type Bank struct {
-	types []ArchType
-	tasks []Task
-	files fs.FS
+	types    []ArchType
+	tasks    []Task
+	learning LearningCatalog
+	files    fs.FS
 }
 
 type typeFile struct {
@@ -50,7 +51,7 @@ func Load(fsys fs.FS) (*Bank, error) {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() || p == "types.yaml" || !strings.HasSuffix(p, ".yaml") {
+		if d.IsDir() || p == "types.yaml" || p == "learning.yaml" || !strings.HasSuffix(p, ".yaml") {
 			return nil
 		}
 		raw, err := fs.ReadFile(fsys, p)
@@ -80,6 +81,9 @@ func Load(fsys fs.FS) (*Bank, error) {
 		}
 		return b.tasks[i].Title < b.tasks[j].Title
 	})
+	if err := b.loadLearning(fsys); err != nil {
+		return nil, err
+	}
 	return b, nil
 }
 

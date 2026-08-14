@@ -1,8 +1,9 @@
 {{define "content"}}
 <article class="rubric">
   <p class="crumb"><a href="/sessions/{{.Session.ID}}">← сессия</a></p>
-  <h1>Рубрика</h1>
+  <h1>{{if .Learning}}Обратная связь по обучению{{else}}Рубрика{{end}}</h1>
   <p class="meta">{{.Task.Title}} · {{.Session.Mode.Label}}</p>
+  {{if .Learning}}<p>Уровни отражают то, что получилось применить к концу сессии. Использование подсказок само по себе не считается ошибкой.</p>{{end}}
   {{if .Usage}}<p class="usage">{{.Usage}}</p>{{end}}
   {{if .Criteria}}
   <ul class="criteria">

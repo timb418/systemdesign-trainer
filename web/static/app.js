@@ -202,11 +202,13 @@ function mountDrawioIframe(iframe, opts) {
   const usageEl = document.getElementById("usage");
   const iframe = document.getElementById("board");
   const showBtn = document.getElementById("show-board");
+  const assistantLabel = root.dataset.assistantLabel || "Интервьюер";
+  const isLearning = root.dataset.mode === "learning";
 
   function appendMsg(role, text) {
     const art = document.createElement("article");
     art.className = "msg " + role;
-    const title = role === "user" ? "Вы" : role === "assistant" ? "Интервьюер" : "Система";
+    const title = role === "user" ? "Вы" : role === "assistant" ? assistantLabel : "Система";
     art.innerHTML = "<h3></h3><div class=\"body\"></div>";
     art.querySelector("h3").textContent = title;
     art.querySelector(".body").textContent = text;
@@ -230,10 +232,10 @@ function mountDrawioIframe(iframe, opts) {
     const art = document.createElement("article");
     art.className = "msg event";
     const h3 = document.createElement("h3");
-    h3.textContent = "Доска показана интервьюеру";
+    h3.textContent = isLearning ? "Схема показана наставнику" : "Доска показана интервьюеру";
     const lead = document.createElement("p");
     lead.className = "event-lead";
-    lead.textContent = "Интервьюер не видит картинку — только текстовую схему из узлов и стрелок.";
+    lead.textContent = (isLearning ? "Наставник" : "Интервьюер") + " видит только текстовую схему из узлов и стрелок.";
     const meta = document.createElement("p");
     meta.className = "meta";
     if (typeof nodes === "number" && typeof edges === "number") {
@@ -247,7 +249,7 @@ function mountDrawioIframe(iframe, opts) {
     if (dump) {
       const details = document.createElement("details");
       const summary = document.createElement("summary");
-      summary.textContent = "Что увидел интервьюер";
+      summary.textContent = isLearning ? "Что увидел наставник" : "Что увидел интервьюер";
       const pre = document.createElement("pre");
       pre.className = "board-dump";
       pre.textContent = dump;

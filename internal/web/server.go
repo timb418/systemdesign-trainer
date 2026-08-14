@@ -37,7 +37,7 @@ type Server struct {
 
 func New(bank *tasks.Bank, st *store.Store, set *settings.Store, agents *traineragent.Agents) (*Server, error) {
 	s := &Server{bank: bank, store: st, set: set, agents: agents, pages: map[string]*template.Template{}, drawio: drawioSrc()}
-	pages := []string{"catalog.html", "task.html", "session.html", "settings.html", "history.html", "rubric.html", "compare.html", "error.html"}
+	pages := []string{"catalog.html", "task.html", "session.html", "learning_session.html", "learn.html", "settings.html", "history.html", "rubric.html", "compare.html", "error.html"}
 	for _, p := range pages {
 		t, err := template.New("").Funcs(template.FuncMap{
 			"join":           strings.Join,
@@ -61,6 +61,8 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("GET /drawio/", http.StripPrefix("/drawio/", http.FileServer(http.Dir(dir))))
 	}
 	mux.HandleFunc("GET /{$}", s.catalog)
+	mux.HandleFunc("GET /learn", s.learningHub)
+	mux.HandleFunc("GET /learn/{track}", s.learningHub)
 	mux.HandleFunc("GET /tasks/{id}", s.task)
 	mux.HandleFunc("POST /tasks/{id}/solved", s.toggleSolved)
 	mux.HandleFunc("POST /sessions", s.startSession)
@@ -68,6 +70,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /sessions/{id}/board.xml", s.boardXML)
 	mux.HandleFunc("GET /sessions/{id}/gold.xml", s.goldXML)
 	mux.HandleFunc("POST /sessions/{id}/messages", s.postMessage)
+	mux.HandleFunc("POST /sessions/{id}/learning/hint", s.learningHint)
+	mux.HandleFunc("POST /sessions/{id}/learning/advance", s.learningAdvance)
 	mux.HandleFunc("POST /sessions/{id}/board", s.postBoard)
 	mux.HandleFunc("POST /sessions/{id}/board/upload", s.uploadBoard)
 	mux.HandleFunc("POST /sessions/{id}/complete", s.complete)
@@ -263,6 +267,9 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg, _ := s.set.Load()
+	if mode == store.ModeLearning {
+		cfg.TimerEnabled = false
+	}
 	sess, err := s.store.CreateSession(r.Context(), taskID, mode, cfg.TimerEnabled, cfg.TimerMinutes)
 	if err != nil {
 		s.fail(w, 500, err.Error())
@@ -272,10 +279,19 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/sessions/"+sess.ID+"/compare", http.StatusSeeOther)
 		return
 	}
+	content := strings.TrimSpace(t.PromptPublic)
+	if mode == store.ModeLearning {
+		blueprint, _ := s.bank.LearningBlueprint(t.ID)
+		if err := s.store.CreateLearningState(r.Context(), sess.ID, blueprint.Phases[0].ID); err != nil {
+			s.fail(w, 500, err.Error())
+			return
+		}
+		content = learningIntro(t, blueprint)
+	}
 	_, _ = s.store.AddMessage(r.Context(), store.Message{
 		SessionID: sess.ID,
 		Role:      "assistant",
-		Content:   strings.TrimSpace(t.PromptPublic),
+		Content:   content,
 	})
 	http.Redirect(w, r, "/sessions/"+sess.ID, http.StatusSeeOther)
 }
@@ -296,6 +312,10 @@ func (s *Server) showSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	msgs, _ := s.store.ListMessages(r.Context(), sess.ID)
+	if sess.Mode == store.ModeLearning {
+		s.showLearningSession(w, r, sess, t, msgs)
+		return
+	}
 	s.render(w, "session.html", map[string]any{
 		"Title":     t.Title,
 		"Session":   sess,
@@ -338,6 +358,10 @@ func (s *Server) goldXML(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "нет эталонной схемы", 404)
 		return
 	}
+	if sess.Mode == store.ModeLearning && !s.learningGoldUnlocked(r.Context(), sess) {
+		http.Error(w, "эталон откроется после рефлексии", http.StatusForbidden)
+		return
+	}
 	raw, err := s.bank.ReadDiagram(t.PreferredSolution.Diagram)
 	if err != nil {
 		http.Error(w, err.Error(), 404)
@@ -371,7 +395,7 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = s.store.AddMessage(r.Context(), store.Message{SessionID: sess.ID, Role: "user", Content: body.Content})
 	history, _ := s.store.ListMessages(r.Context(), sess.ID)
-	s.streamInterview(r.Context(), startSSE(w), sess, t, history[:len(history)-1], body.Content)
+	s.streamConversation(r.Context(), startSSE(w), sess, t, history[:len(history)-1], body.Content)
 }
 
 func startSSE(w http.ResponseWriter) func(any) {
@@ -387,10 +411,29 @@ func startSSE(w http.ResponseWriter) func(any) {
 	}
 }
 
-func (s *Server) streamInterview(ctx context.Context, writeEvt func(any), sess store.Session, t tasks.Task, history []store.Message, userText string) {
-	text, usage, err := s.agents.Interview(ctx, sess, t, history, userText, func(tok string) {
+func (s *Server) streamConversation(ctx context.Context, writeEvt func(any), sess store.Session, t tasks.Task, history []store.Message, userText string) {
+	var text string
+	var usage traineragent.Usage
+	var err error
+	onToken := func(tok string) {
 		writeEvt(map[string]any{"type": "token", "text": tok})
-	})
+	}
+	if sess.Mode == store.ModeLearning {
+		blueprint, _ := s.bank.LearningBlueprint(t.ID)
+		state, stateErr := s.store.GetLearningState(ctx, sess.ID)
+		if stateErr != nil {
+			writeEvt(map[string]any{"type": "error", "message": stateErr.Error()})
+			return
+		}
+		phase, ok := learningPhase(blueprint, state.Phase)
+		if !ok {
+			writeEvt(map[string]any{"type": "error", "message": "обучение завершено"})
+			return
+		}
+		text, usage, err = s.agents.Mentor(ctx, sess, t, blueprint, phase, history, userText, onToken)
+	} else {
+		text, usage, err = s.agents.Interview(ctx, sess, t, history, userText, onToken)
+	}
 	if err != nil {
 		writeEvt(map[string]any{"type": "error", "message": err.Error()})
 		return
@@ -464,7 +507,7 @@ func (s *Server) postBoard(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		history, _ := s.store.ListMessages(r.Context(), sess.ID)
-		s.streamInterview(r.Context(), writeEvt, sess, t, history[:len(history)-1], msg)
+		s.streamConversation(r.Context(), writeEvt, sess, t, history[:len(history)-1], msg)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -507,6 +550,10 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, 404, "нет задачи")
 		return
 	}
+	if sess.Mode == store.ModeLearning && !s.learningGoldUnlocked(r.Context(), sess) {
+		s.fail(w, 400, "сначала завершите рефлексию в обучающем режиме")
+		return
+	}
 	msgs, _ := s.store.ListMessages(r.Context(), sess.ID)
 	var topo diagram.Topology
 	xmlText := ""
@@ -520,6 +567,16 @@ func (s *Server) complete(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	payload := buildEvalPayload(sess, t, msgs, topo)
+	if sess.Mode == store.ModeLearning {
+		if assistance, err := s.store.LearningPhaseAssistance(r.Context(), sess.ID); err == nil {
+			payload += "\nПомощь по учебным этапам (не штрафовать за сам факт помощи):\n"
+			for _, phaseID := range []string{"orientation", "requirements", "scale", "hld", "deep_dive", "reflection"} {
+				if level := assistance[phaseID]; level != "" {
+					payload += fmt.Sprintf("- %s: %s\n", phaseID, level)
+				}
+			}
+		}
+	}
 	raw, usage, err := s.agents.Evaluate(r.Context(), payload)
 	if err != nil {
 		s.fail(w, 502, "оценщик: "+err.Error())
@@ -556,8 +613,9 @@ func (s *Server) rubric(w http.ResponseWriter, r *http.Request) {
 		"Session":    sess,
 		"Task":       t.Public(),
 		"Criteria":   parseCriteria(rub.JSON),
-		"CanCompare": sess.Mode == store.ModeFullMock || sess.Mode == store.ModeDrill,
+		"CanCompare": sess.Mode == store.ModeFullMock || sess.Mode == store.ModeDrill || sess.Mode == store.ModeLearning,
 		"Usage":      usageLabel(sess),
+		"Learning":   sess.Mode == store.ModeLearning,
 	})
 }
 
@@ -570,6 +628,10 @@ func (s *Server) compare(w http.ResponseWriter, r *http.Request) {
 	t, ok := s.bank.Get(orig.TaskID)
 	if !ok {
 		s.fail(w, 404, "нет задачи")
+		return
+	}
+	if orig.Mode == store.ModeLearning && !s.learningGoldUnlocked(r.Context(), orig) {
+		s.fail(w, 403, "эталон откроется после рефлексии")
 		return
 	}
 	attempt := orig
@@ -591,7 +653,7 @@ func (s *Server) compare(w http.ResponseWriter, r *http.Request) {
 			goldDump = diagram.Parse(raw).Human()
 		}
 	}
-	s.render(w, "compare.html", map[string]any{
+	view := map[string]any{
 		"Title":         "Эталон",
 		"Session":       orig,
 		"AttemptID":     attempt.ID,
@@ -602,7 +664,15 @@ func (s *Server) compare(w http.ResponseWriter, r *http.Request) {
 		"GoldTradeoffs": t.PreferredSolution.Tradeoffs,
 		"Notes":         orig.CompareNotes,
 		"CanAnalyze":    s.set.HasAPIKey(),
-	})
+		"Learning":      orig.Mode == store.ModeLearning,
+	}
+	if orig.Mode == store.ModeLearning {
+		blueprint, _ := s.bank.LearningBlueprint(orig.TaskID)
+		view["Concepts"] = blueprint.Concepts
+		view["CommonMistakes"] = blueprint.CommonMistakes
+		view["Assistance"], _ = s.store.LearningPhaseAssistance(r.Context(), orig.ID)
+	}
+	s.render(w, "compare.html", view)
 }
 
 func (s *Server) compareAnalyze(w http.ResponseWriter, r *http.Request) {

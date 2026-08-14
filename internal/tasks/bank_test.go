@@ -99,3 +99,41 @@ func TestEmbeddedBankCoverage(t *testing.T) {
 		}
 	}
 }
+
+func TestLearningBlueprintCoversEntireBank(t *testing.T) {
+	fsys, err := tasks.Embedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bank, err := tasks.Load(fsys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, task := range bank.All() {
+		blueprint, ok := bank.LearningBlueprint(task.ID)
+		if !ok {
+			t.Fatalf("missing learning blueprint for %s", task.ID)
+		}
+		if len(blueprint.Phases) != tasks.LearningPhaseCount {
+			t.Fatalf("%s phases: got %d want %d", task.ID, len(blueprint.Phases), tasks.LearningPhaseCount)
+		}
+		if len(blueprint.Concepts) == 0 || len(blueprint.Objectives) == 0 {
+			t.Fatalf("%s has incomplete learning defaults", task.ID)
+		}
+		seen := map[string]struct{}{}
+		for _, phase := range blueprint.Phases {
+			if _, exists := seen[phase.ID]; exists {
+				t.Fatalf("%s duplicate phase %s", task.ID, phase.ID)
+			}
+			seen[phase.ID] = struct{}{}
+			if strings.TrimSpace(phase.Goal) == "" || len(phase.Hints) < 3 {
+				t.Fatalf("%s phase %s has incomplete hint ladder", task.ID, phase.ID)
+			}
+			for _, hint := range phase.Hints {
+				if strings.Contains(hint, task.PreferredSolution.Narrative) {
+					t.Fatalf("%s phase %s leaked preferred solution", task.ID, phase.ID)
+				}
+			}
+		}
+	}
+}

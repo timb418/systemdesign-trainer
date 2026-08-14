@@ -1,0 +1,101 @@
+{{define "content"}}
+<section class="session learning-session" data-session="{{.Session.ID}}" data-started="{{.Session.StartedAt.Unix}}" data-timer="0" data-drawio="{{.DrawioURL}}" data-xml-url="/sessions/{{.Session.ID}}/board.xml" data-mode="learning" data-assistant-label="Наставник">
+  <header class="session-bar">
+    <div>
+      <h1>{{.Task.Title}}</h1>
+      <p class="meta">Обучение · сложность {{.Task.Difficulty}}{{if .HasKey}}{{else}} · <a href="/settings">нет ключа OpenRouter</a>{{end}}</p>
+    </div>
+    <div class="session-actions">
+      <span id="usage" class="usage">{{if gt .Session.PromptTokens 0}}{{.Session.PromptTokens}}+{{.Session.CompletionTokens}} ток.{{if gt .Session.Cost 0.0}} · ${{printf "%.4f" .Session.Cost}}{{end}}{{end}}</span>
+      {{if eq .Session.Status "in_progress"}}
+        {{if .GoldUnlocked}}
+        <form method="post" action="/sessions/{{.Session.ID}}/complete" data-wait-title="Подводим итоги" data-wait-hint="Оценщик готовит formative feedback перед сравнением с эталоном.">
+          <button type="submit">Завершить и открыть разбор</button>
+        </form>
+        {{else}}
+        <button type="button" id="show-board">Показать схему наставнику</button>
+        {{end}}
+      {{else}}
+      <a class="btn" href="/sessions/{{.Session.ID}}/compare">Эталон и сравнение</a>
+      {{end}}
+    </div>
+  </header>
+
+  <div class="learning-layout">
+    <aside class="learning-sidebar">
+      <h2>Путь решения</h2>
+      <ol class="phase-list">
+        {{range .Phases}}
+        <li class="{{if .Current}}current{{else if .Completed}}completed{{end}}">
+          <span>{{.Title}}</span>
+          {{if .Completed}}<small>{{if eq .Assistance "independent"}}самостоятельно{{else if eq .Assistance "hinted"}}с подсказкой{{else}}с объяснением{{end}}</small>{{end}}
+        </li>
+        {{end}}
+      </ol>
+      {{if not .GoldUnlocked}}
+      <div class="phase-card">
+        <h3>{{.CurrentPhase.Title}}</h3>
+        <p>{{.CurrentPhase.Goal}}</p>
+        {{if .Hint}}<p class="learning-hint"><strong>Подсказка {{.State.HintLevel}}:</strong> {{.Hint}}</p>{{end}}
+        <div class="phase-actions">
+          {{if .CanHint}}
+          <form method="post" action="/sessions/{{.Session.ID}}/learning/hint">
+            <button type="submit" class="secondary">Нужна подсказка</button>
+          </form>
+          {{end}}
+          <form method="post" action="/sessions/{{.Session.ID}}/learning/advance">
+            <button type="submit">Этап готов</button>
+          </form>
+        </div>
+      </div>
+      {{else}}
+      <div class="phase-card">
+        <h3>Рефлексия завершена</h3>
+        <p>Завершите сессию, чтобы получить обратную связь и открыть эталон.</p>
+      </div>
+      {{end}}
+      <details>
+        <summary>Учебные цели</summary>
+        <ul>{{range .Blueprint.Objectives}}<li>{{.}}</li>{{end}}</ul>
+      </details>
+    </aside>
+
+    <div class="chat-col">
+      <div id="chat" class="chat">
+        {{range .Messages}}
+        {{if isBoardShare .Content}}
+        <article class="msg event">
+          <h3>Схема показана наставнику</h3>
+          <p class="event-lead">Наставник видит текстовую проекцию узлов и связей.</p>
+          <details><summary>Что увидел наставник</summary><pre class="board-dump">{{boardShareDump .Content}}</pre></details>
+        </article>
+        {{else}}
+        <article class="msg {{.Role}}">
+          <h3>{{if eq .Role "user"}}Вы{{else if eq .Role "assistant"}}Наставник{{else}}Этап{{end}}</h3>
+          <div class="body">{{.Content}}</div>
+        </article>
+        {{end}}
+        {{end}}
+      </div>
+      {{if and (eq .Session.Status "in_progress") (not .GoldUnlocked)}}
+      <form id="chat-form" class="composer">
+        <textarea name="content" rows="3" required placeholder="Ваша попытка, вопрос или просьба объяснить понятие…"></textarea>
+        <button type="submit">Отправить</button>
+      </form>
+      {{end}}
+    </div>
+
+    <div class="board-col">
+      <iframe id="board" title="Доска"></iframe>
+      {{if and (eq .Session.Status "in_progress") (not .GoldUnlocked)}}
+      <form class="upload" method="post" action="/sessions/{{.Session.ID}}/board/upload" enctype="multipart/form-data">
+        <label>Fallback: загрузить .drawio / XML
+          <input type="file" name="file" accept=".drawio,.xml,application/xml,text/xml">
+        </label>
+        <button type="submit">Загрузить</button>
+      </form>
+      {{end}}
+    </div>
+  </div>
+</section>
+{{end}}

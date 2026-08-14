@@ -26,6 +26,7 @@ import (
 
 const (
 	appInterview = "sdt-interview"
+	appMentor    = "sdt-mentor"
 	appEval      = "sdt-eval"
 	appCompare   = "sdt-compare"
 	localUser    = "local"
@@ -103,6 +104,26 @@ func (a *Agents) interviewAgent(ctx context.Context, llm model.LLM, t tasks.Task
 		Model:       llm,
 		Description: "Интервьюер system design",
 		Instruction: instruction,
+		Tools:       []tool.Tool{reveal},
+		GenerateContentConfig: &genai.GenerateContentConfig{
+			Temperature: &temp,
+		},
+		DisallowTransferToParent: true,
+		DisallowTransferToPeers:  true,
+	})
+}
+
+func (a *Agents) mentorAgent(ctx context.Context, llm model.LLM, t tasks.Task, blueprint tasks.LearningBlueprint, phase tasks.LearningPhase) (agent.Agent, error) {
+	reveal, err := a.revealTool(t)
+	if err != nil {
+		return nil, err
+	}
+	temp := float32(0.6)
+	return llmagent.New(llmagent.Config{
+		Name:        "mentor",
+		Model:       llm,
+		Description: "Наставник по system design",
+		Instruction: mentorInstruction(t, blueprint, phase),
 		Tools:       []tool.Tool{reveal},
 		GenerateContentConfig: &genai.GenerateContentConfig{
 			Temperature: &temp,
@@ -194,6 +215,53 @@ func (a *Agents) Interview(ctx context.Context, sess store.Session, t tasks.Task
 	return strings.TrimSpace(full.String()), usage, nil
 }
 
+func (a *Agents) Mentor(ctx context.Context, sess store.Session, t tasks.Task, blueprint tasks.LearningBlueprint, phase tasks.LearningPhase, history []store.Message, userText string, onToken TokenFn) (string, Usage, error) {
+	key, err := a.set.APIKey()
+	if err != nil {
+		return "", Usage{}, err
+	}
+	if key == "" {
+		return "", Usage{}, fmt.Errorf("нет ключа OpenRouter — укажите его в настройках")
+	}
+	cfg, err := a.set.Load()
+	if err != nil {
+		return "", Usage{}, err
+	}
+	llm, err := a.model(ctx, cfg.InterviewerModel, key, cfg.ReasoningEffort)
+	if err != nil {
+		return "", Usage{}, err
+	}
+	ag, err := a.mentorAgent(ctx, llm, t, blueprint, phase)
+	if err != nil {
+		return "", Usage{}, err
+	}
+	r, err := runner.New(runner.Config{
+		AppName: appMentor, Agent: ag, SessionService: a.sess, AutoCreateSession: false,
+	})
+	if err != nil {
+		return "", Usage{}, err
+	}
+	if err := a.ensureChatSession(ctx, appMentor, "mentor", sess, t, history); err != nil {
+		return "", Usage{}, err
+	}
+	msg := genai.NewContentFromText(userText, genai.RoleUser)
+	var full strings.Builder
+	var usage Usage
+	for event, err := range r.Run(ctx, localUser, sess.ID, msg, agent.RunConfig{StreamingMode: agent.StreamingModeSSE}) {
+		if err != nil {
+			return full.String(), usage, err
+		}
+		if event == nil {
+			continue
+		}
+		appendInterviewText(&full, event, onToken)
+		if u := usageFrom(event); u.PromptTokens+u.CompletionTokens > 0 || u.Cost > 0 {
+			usage = u
+		}
+	}
+	return strings.TrimSpace(full.String()), usage, nil
+}
+
 func (a *Agents) Evaluate(ctx context.Context, payload string) (string, Usage, error) {
 	return a.oneShot(ctx, appEval, func(ctx context.Context, llm model.LLM) (agent.Agent, error) {
 		return a.evalAgent(ctx, llm)
@@ -260,14 +328,18 @@ func (a *Agents) oneShot(ctx context.Context, app string, makeAgent func(context
 }
 
 func (a *Agents) ensureInterviewSession(ctx context.Context, sess store.Session, t tasks.Task, history []store.Message) error {
+	return a.ensureChatSession(ctx, appInterview, "interviewer", sess, t, history)
+}
+
+func (a *Agents) ensureChatSession(ctx context.Context, appName, assistantAuthor string, sess store.Session, t tasks.Task, history []store.Message) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	_, err := a.sess.Get(ctx, &session.GetRequest{AppName: appInterview, UserID: localUser, SessionID: sess.ID})
+	_, err := a.sess.Get(ctx, &session.GetRequest{AppName: appName, UserID: localUser, SessionID: sess.ID})
 	if err == nil {
 		return nil
 	}
 	created, err := a.sess.Create(ctx, &session.CreateRequest{
-		AppName:   appInterview,
+		AppName:   appName,
 		UserID:    localUser,
 		SessionID: sess.ID,
 		State:     map[string]any{"task_id": t.ID},
@@ -281,7 +353,7 @@ func (a *Agents) ensureInterviewSession(ctx context.Context, sess store.Session,
 		ev.Author = "user"
 		if m.Role == "assistant" {
 			role = genai.RoleModel
-			ev.Author = "interviewer"
+			ev.Author = assistantAuthor
 		}
 		ev.LLMResponse.Content = genai.NewContentFromText(m.Content, role)
 		if err := a.sess.AppendEvent(ctx, created.Session, ev); err != nil {
@@ -392,6 +464,47 @@ func interviewerInstruction(t tasks.Task, mode store.Mode) string {
 		s += "\nРежим практики паттерна: уже фокус на паттерне этого типа. Deep dive уже и короче, в «фирменное» узкое место."
 	}
 	return s + rules.String()
+}
+
+func mentorInstruction(t tasks.Task, blueprint tasks.LearningBlueprint, phase tasks.LearningPhase) string {
+	s := mentorPrompt
+	replacements := map[string]string{
+		"{{phase_title}}":   phase.Title,
+		"{{phase_goal}}":    phase.Goal,
+		"{{task_title}}":    t.Title,
+		"{{difficulty}}":    fmt.Sprintf("%d", t.Difficulty),
+		"{{prompt_public}}": strings.TrimSpace(t.PromptPublic),
+		"{{objectives}}":    bulletList(blueprint.Objectives),
+		"{{concepts}}":      conceptList(blueprint.Concepts),
+	}
+	for old, value := range replacements {
+		s = strings.ReplaceAll(s, old, value)
+	}
+	var rules strings.Builder
+	rules.WriteString("\n\nДоступные темы reveal_facts:\n")
+	for _, rule := range t.RevealOnQuestion {
+		fmt.Fprintf(&rules, "- %s: %s\n", rule.ID, strings.Join(rule.Keywords, ", "))
+	}
+	return s + rules.String()
+}
+
+func bulletList(items []string) string {
+	if len(items) == 0 {
+		return "- Общая практика этапа."
+	}
+	var b strings.Builder
+	for _, item := range items {
+		fmt.Fprintf(&b, "- %s\n", item)
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func conceptList(concepts []tasks.Concept) string {
+	var lines []string
+	for _, concept := range concepts {
+		lines = append(lines, fmt.Sprintf("- %s: %s", concept.Title, concept.Summary))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func rubricSchema() *genai.Schema {

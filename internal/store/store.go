@@ -19,6 +19,7 @@ const (
 	ModeDrill        Mode = "drill"
 	ModeRequirements Mode = "requirements_only"
 	ModeCompareGold  Mode = "compare_gold"
+	ModeLearning     Mode = "learning"
 )
 
 func (m Mode) String() string { return string(m) }
@@ -33,6 +34,8 @@ func (m Mode) Label() string {
 		return "Только требования"
 	case ModeCompareGold:
 		return "Сравнение с эталоном"
+	case ModeLearning:
+		return "Обучение"
 	default:
 		return string(m)
 	}
@@ -40,7 +43,7 @@ func (m Mode) Label() string {
 
 func ParseMode(s string) (Mode, error) {
 	switch Mode(s) {
-	case ModeFullMock, ModeDrill, ModeRequirements, ModeCompareGold:
+	case ModeFullMock, ModeDrill, ModeRequirements, ModeCompareGold, ModeLearning:
 		return Mode(s), nil
 	default:
 		return "", fmt.Errorf("неизвестный режим %q", s)
@@ -102,6 +105,21 @@ type Rubric struct {
 	SessionID string
 	JSON      string
 	CreatedAt time.Time
+}
+
+type LearningState struct {
+	SessionID string
+	Phase     string
+	HintLevel int
+	UpdatedAt time.Time
+}
+
+type LearningProgress struct {
+	TaskID          string
+	SessionID       string
+	CurrentPhase    string
+	CompletedPhases int
+	UpdatedAt       time.Time
 }
 
 type Store struct {
@@ -166,6 +184,19 @@ CREATE TABLE IF NOT EXISTS rubrics (
 CREATE TABLE IF NOT EXISTS solved_tasks (
   task_id TEXT PRIMARY KEY,
   solved_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS learning_states (
+  session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+  phase TEXT NOT NULL,
+  hint_level INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS learning_phase_results (
+  session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  phase TEXT NOT NULL,
+  assistance TEXT NOT NULL,
+  completed_at TEXT NOT NULL,
+  PRIMARY KEY (session_id, phase)
 );
 `)
 	return err
@@ -251,9 +282,9 @@ func (s *Store) LatestCompleted(ctx context.Context, taskID string, excludeID st
 SELECT id, task_id, mode, status, timer_enabled, timer_minutes, started_at, ended_at,
        prompt_tokens, completion_tokens, cost, compare_notes
 FROM sessions
-WHERE task_id = ? AND status = ? AND mode IN (?, ?) AND id != ?
+WHERE task_id = ? AND status = ? AND mode IN (?, ?, ?) AND id != ?
 ORDER BY started_at DESC LIMIT 1`,
-		taskID, StatusCompleted, ModeFullMock, ModeDrill, excludeID,
+		taskID, StatusCompleted, ModeFullMock, ModeDrill, ModeLearning, excludeID,
 	).Scan(&sess.ID, &sess.TaskID, &sess.Mode, &sess.Status, &timer, &sess.TimerMinutes,
 		&started, &ended, &sess.PromptTokens, &sess.CompletionTokens, &sess.Cost, &sess.CompareNotes)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -274,9 +305,136 @@ ORDER BY started_at DESC LIMIT 1`,
 func (s *Store) HasCompleted(ctx context.Context, taskID string) bool {
 	var n int
 	_ = s.db.QueryRowContext(ctx, `
-SELECT COUNT(1) FROM sessions WHERE task_id = ? AND status = ? AND mode IN (?, ?)`,
-		taskID, StatusCompleted, ModeFullMock, ModeDrill).Scan(&n)
+SELECT COUNT(1) FROM sessions WHERE task_id = ? AND status = ? AND mode IN (?, ?, ?)`,
+		taskID, StatusCompleted, ModeFullMock, ModeDrill, ModeLearning).Scan(&n)
 	return n > 0
+}
+
+func (s *Store) CreateLearningState(ctx context.Context, sessionID, phase string) error {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO learning_states (session_id, phase, hint_level, updated_at)
+VALUES (?, ?, 0, ?)
+ON CONFLICT(session_id) DO NOTHING`, sessionID, phase, now)
+	return err
+}
+
+func (s *Store) GetLearningState(ctx context.Context, sessionID string) (LearningState, error) {
+	var state LearningState
+	var updated string
+	err := s.db.QueryRowContext(ctx, `
+SELECT session_id, phase, hint_level, updated_at
+FROM learning_states WHERE session_id = ?`, sessionID).Scan(
+		&state.SessionID, &state.Phase, &state.HintLevel, &updated,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return state, fmt.Errorf("учебный прогресс не найден")
+	}
+	if err != nil {
+		return state, err
+	}
+	state.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
+	return state, nil
+}
+
+func (s *Store) IncreaseLearningHint(ctx context.Context, sessionID string, max int) (LearningState, error) {
+	if max < 0 {
+		max = 0
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err := s.db.ExecContext(ctx, `
+UPDATE learning_states
+SET hint_level = CASE WHEN hint_level < ? THEN hint_level + 1 ELSE hint_level END,
+    updated_at = ?
+WHERE session_id = ?`, max, now, sessionID)
+	if err != nil {
+		return LearningState{}, err
+	}
+	return s.GetLearningState(ctx, sessionID)
+}
+
+func (s *Store) AdvanceLearningPhase(ctx context.Context, sessionID, current, next string) error {
+	state, err := s.GetLearningState(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if state.Phase != current {
+		return fmt.Errorf("этап уже изменился")
+	}
+	assistance := "independent"
+	if state.HintLevel > 0 {
+		assistance = "hinted"
+	}
+	if state.HintLevel >= 3 {
+		assistance = "explained"
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `
+INSERT INTO learning_phase_results (session_id, phase, assistance, completed_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(session_id, phase) DO UPDATE SET
+  assistance = excluded.assistance, completed_at = excluded.completed_at`,
+		sessionID, current, assistance, now); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+UPDATE learning_states SET phase = ?, hint_level = 0, updated_at = ? WHERE session_id = ?`,
+		next, now, sessionID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *Store) LearningProgress(ctx context.Context) (map[string]LearningProgress, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT se.task_id, se.id, ls.phase, COUNT(lpr.phase), ls.updated_at
+FROM sessions se
+JOIN learning_states ls ON ls.session_id = se.id
+LEFT JOIN learning_phase_results lpr ON lpr.session_id = se.id
+WHERE se.mode = ?
+GROUP BY se.id
+ORDER BY ls.updated_at DESC`, ModeLearning)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]LearningProgress{}
+	for rows.Next() {
+		var p LearningProgress
+		var updated string
+		if err := rows.Scan(&p.TaskID, &p.SessionID, &p.CurrentPhase, &p.CompletedPhases, &updated); err != nil {
+			return nil, err
+		}
+		if _, exists := out[p.TaskID]; exists {
+			continue
+		}
+		p.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
+		out[p.TaskID] = p
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) LearningPhaseAssistance(ctx context.Context, sessionID string) (map[string]string, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT phase, assistance FROM learning_phase_results WHERE session_id = ?`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var phase, assistance string
+		if err := rows.Scan(&phase, &assistance); err != nil {
+			return nil, err
+		}
+		out[phase] = assistance
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) SetSolved(ctx context.Context, taskID string, solved bool) error {

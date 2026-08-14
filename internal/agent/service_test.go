@@ -7,6 +7,8 @@ import (
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/genai"
+
+	"github.com/timb418/systemdesign-trainer/internal/tasks"
 )
 
 func textEvent(partial bool, parts ...*genai.Part) *session.Event {
@@ -15,6 +17,30 @@ func textEvent(partial bool, parts ...*genai.Part) *session.Event {
 			Partial: partial,
 			Content: &genai.Content{Parts: parts},
 		},
+	}
+}
+
+func TestMentorInstructionDoesNotContainGold(t *testing.T) {
+	task := tasks.Task{
+		Title: "Тестовая задача", Difficulty: 2, PromptPublic: "Спроектируйте сервис.",
+		PreferredSolution: tasks.PreferredSolution{
+			Narrative: "СЕКРЕТНЫЙ ЭТАЛОН С КОНКРЕТНОЙ АРХИТЕКТУРОЙ",
+			Tradeoffs: []string{"секретный компромисс"},
+		},
+		RevealOnQuestion: []tasks.RevealRule{{ID: "scale", Keywords: []string{"qps"}}},
+	}
+	blueprint := tasks.LearningBlueprint{
+		Objectives: []string{"Сделать самостоятельную попытку"},
+		Concepts:   []tasks.Concept{{Title: "Кэш", Summary: "Ускоряет чтение."}},
+	}
+	phase := tasks.LearningPhase{ID: "hld", Title: "HLD", Goal: "Нарисовать сквозной путь"}
+	instruction := mentorInstruction(task, blueprint, phase)
+	if strings.Contains(instruction, task.PreferredSolution.Narrative) ||
+		strings.Contains(instruction, task.PreferredSolution.Tradeoffs[0]) {
+		t.Fatal("mentor instruction leaked preferred solution")
+	}
+	if !strings.Contains(instruction, phase.Goal) || !strings.Contains(instruction, task.PromptPublic) {
+		t.Fatalf("mentor instruction missing phase-scoped context: %s", instruction)
 	}
 }
 

@@ -31,6 +31,21 @@
     </ul>
     {{end}}
   </section>
+  {{if .Learning}}
+  <section>
+    <h2>Что закрепить дальше</h2>
+    {{if .Concepts}}
+    <ul>
+      {{range .Concepts}}<li><strong>{{.Title}}:</strong> {{.Summary}}</li>{{end}}
+    </ul>
+    {{end}}
+    {{if .CommonMistakes}}
+    <h3>Типичные ловушки этой задачи</h3>
+    <ul>{{range .CommonMistakes}}<li>{{.}}</li>{{end}}</ul>
+    {{end}}
+    <p><a class="btn" href="/learn">Вернуться к учебному треку</a></p>
+  </section>
+  {{end}}
   {{if .Notes}}
   <section>
     <h2>Разбор отличий</h2>

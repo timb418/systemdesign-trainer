@@ -329,3 +329,97 @@ func TestMarkTaskSolved(t *testing.T) {
 		t.Fatalf("catalog still marked after unmark: %s", html)
 	}
 }
+
+func TestLearningModeProgressiveDisclosure(t *testing.T) {
+	h := testServer(t)
+	ts := httptest.NewServer(h)
+	t.Cleanup(ts.Close)
+	client := ts.Client()
+
+	hub, _ := io.ReadAll(mustGet(t, client, ts.URL+"/learn"))
+	if !strings.Contains(string(hub), "Основы system design") || !strings.Contains(string(hub), "этапов 0/6") {
+		t.Fatalf("learning hub missing track: %s", hub)
+	}
+
+	res, err := client.PostForm(ts.URL+"/sessions", url.Values{
+		"task_id": {"url-shortener-v1"}, "mode": {"learning"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessionPath := res.Request.URL.Path
+	page, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if !strings.Contains(sessionPath, "/sessions/") || !strings.Contains(string(page), "Ориентация") {
+		t.Fatalf("learning start path=%s page=%s", sessionPath, page)
+	}
+	if !strings.Contains(string(page), `data-timer="0"`) || !strings.Contains(string(page), "Наставник") {
+		t.Fatalf("learning session missing mode-specific UI: %s", page)
+	}
+
+	goldRes, err := client.Get(ts.URL + sessionPath + "/gold.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.Copy(io.Discard, goldRes.Body)
+	goldRes.Body.Close()
+	if goldRes.StatusCode != http.StatusForbidden {
+		t.Fatalf("gold before reflection = %d, want 403", goldRes.StatusCode)
+	}
+
+	blocked, err := client.PostForm(ts.URL+sessionPath+"/learning/advance", url.Values{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.Copy(io.Discard, blocked.Body)
+	blocked.Body.Close()
+	if blocked.StatusCode != http.StatusBadRequest {
+		t.Fatalf("advance without attempt = %d, want 400", blocked.StatusCode)
+	}
+
+	res, err = client.PostForm(ts.URL+sessionPath+"/learning/hint", url.Values{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hintPage, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if !strings.Contains(string(hintPage), "Подсказка 1") {
+		t.Fatalf("hint did not persist: %s", hintPage)
+	}
+
+	for phase := 0; phase < tasks.LearningPhaseCount; phase++ {
+		raw, _ := json.Marshal(map[string]string{"content": "Моя самостоятельная попытка для этапа"})
+		req, err := http.NewRequest(http.MethodPost, ts.URL+sessionPath+"/messages", bytes.NewReader(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		msgRes, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, msgRes.Body)
+		msgRes.Body.Close()
+		if msgRes.StatusCode != http.StatusOK {
+			t.Fatalf("phase %d message status %d", phase, msgRes.StatusCode)
+		}
+		advance, err := client.PostForm(ts.URL+sessionPath+"/learning/advance", url.Values{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, advance.Body)
+		advance.Body.Close()
+		if advance.StatusCode != http.StatusOK {
+			t.Fatalf("phase %d advance status %d", phase, advance.StatusCode)
+		}
+	}
+
+	gold, _ := io.ReadAll(mustGet(t, client, ts.URL+sessionPath+"/gold.xml"))
+	if !strings.Contains(string(gold), "<mxfile") {
+		t.Fatalf("gold should unlock after reflection: %s", gold)
+	}
+	hub, _ = io.ReadAll(mustGet(t, client, ts.URL+"/learn"))
+	if !strings.Contains(string(hub), "этапов 6/6") {
+		t.Fatalf("learning completion missing from hub: %s", hub)
+	}
+}
