@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"sync"
 
 	"github.com/openai/openai-go/v3/option"
 	"google.golang.org/adk/v2/agent"
@@ -29,6 +28,7 @@ const (
 	appMentor    = "sdt-mentor"
 	appEval      = "sdt-eval"
 	appCompare   = "sdt-compare"
+	appSummary   = "sdt-summary"
 	localUser    = "local"
 )
 
@@ -42,13 +42,10 @@ type TokenFn func(text string)
 type Agents struct {
 	bank *tasks.Bank
 	set  *settings.Store
-
-	mu   sync.Mutex
-	sess session.Service
 }
 
 func New(bank *tasks.Bank, set *settings.Store) *Agents {
-	return &Agents{bank: bank, set: set, sess: session.InMemoryService()}
+	return &Agents{bank: bank, set: set}
 }
 
 func (a *Agents) model(ctx context.Context, modelID, apiKey, effort string) (model.LLM, error) {
@@ -165,6 +162,21 @@ func (a *Agents) compareAgent(ctx context.Context, llm model.LLM) (agent.Agent, 
 	})
 }
 
+func (a *Agents) summaryAgent(ctx context.Context, llm model.LLM) (agent.Agent, error) {
+	temp := float32(0.1)
+	return llmagent.New(llmagent.Config{
+		Name:        "summarizer",
+		Model:       llm,
+		Description: "Сжатие старой части диалога",
+		Instruction: summarizerPrompt,
+		GenerateContentConfig: &genai.GenerateContentConfig{
+			Temperature: &temp,
+		},
+		DisallowTransferToParent: true,
+		DisallowTransferToPeers:  true,
+	})
+}
+
 func (a *Agents) Interview(ctx context.Context, sess store.Session, t tasks.Task, history []store.Message, userText string, onToken TokenFn) (string, Usage, error) {
 	key, err := a.set.APIKey()
 	if err != nil {
@@ -185,16 +197,17 @@ func (a *Agents) Interview(ctx context.Context, sess store.Session, t tasks.Task
 	if err != nil {
 		return "", Usage{}, err
 	}
-	r, err := runner.New(runner.Config{
-		AppName:           appInterview,
-		Agent:             ag,
-		SessionService:    a.sess,
-		AutoCreateSession: false,
-	})
+	sessSvc, err := hydrateChatSession(ctx, appInterview, "interviewer", sess, t, history)
 	if err != nil {
 		return "", Usage{}, err
 	}
-	if err := a.ensureInterviewSession(ctx, sess, t, history); err != nil {
+	r, err := runner.New(runner.Config{
+		AppName:           appInterview,
+		Agent:             ag,
+		SessionService:    sessSvc,
+		AutoCreateSession: false,
+	})
+	if err != nil {
 		return "", Usage{}, err
 	}
 	msg := genai.NewContentFromText(userText, genai.RoleUser)
@@ -235,13 +248,14 @@ func (a *Agents) Mentor(ctx context.Context, sess store.Session, t tasks.Task, b
 	if err != nil {
 		return "", Usage{}, err
 	}
-	r, err := runner.New(runner.Config{
-		AppName: appMentor, Agent: ag, SessionService: a.sess, AutoCreateSession: false,
-	})
+	sessSvc, err := hydrateChatSession(ctx, appMentor, "mentor", sess, t, history)
 	if err != nil {
 		return "", Usage{}, err
 	}
-	if err := a.ensureChatSession(ctx, appMentor, "mentor", sess, t, history); err != nil {
+	r, err := runner.New(runner.Config{
+		AppName: appMentor, Agent: ag, SessionService: sessSvc, AutoCreateSession: false,
+	})
+	if err != nil {
 		return "", Usage{}, err
 	}
 	msg := genai.NewContentFromText(userText, genai.RoleUser)
@@ -272,6 +286,12 @@ func (a *Agents) Compare(ctx context.Context, payload string) (string, Usage, er
 	return a.oneShot(ctx, appCompare, func(ctx context.Context, llm model.LLM) (agent.Agent, error) {
 		return a.compareAgent(ctx, llm)
 	}, true, payload)
+}
+
+func (a *Agents) Summarize(ctx context.Context, payload string) (string, Usage, error) {
+	return a.oneShot(ctx, appSummary, func(ctx context.Context, llm model.LLM) (agent.Agent, error) {
+		return a.summaryAgent(ctx, llm)
+	}, false, payload)
 }
 
 func (a *Agents) oneShot(ctx context.Context, app string, makeAgent func(context.Context, model.LLM) (agent.Agent, error), evaluator bool, payload string) (string, Usage, error) {
@@ -327,25 +347,16 @@ func (a *Agents) oneShot(ctx context.Context, app string, makeAgent func(context
 	return strings.TrimSpace(full.String()), usage, nil
 }
 
-func (a *Agents) ensureInterviewSession(ctx context.Context, sess store.Session, t tasks.Task, history []store.Message) error {
-	return a.ensureChatSession(ctx, appInterview, "interviewer", sess, t, history)
-}
-
-func (a *Agents) ensureChatSession(ctx context.Context, appName, assistantAuthor string, sess store.Session, t tasks.Task, history []store.Message) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	_, err := a.sess.Get(ctx, &session.GetRequest{AppName: appName, UserID: localUser, SessionID: sess.ID})
-	if err == nil {
-		return nil
-	}
-	created, err := a.sess.Create(ctx, &session.CreateRequest{
+func hydrateChatSession(ctx context.Context, appName, assistantAuthor string, sess store.Session, t tasks.Task, history []store.Message) (session.Service, error) {
+	sessSvc := session.InMemoryService()
+	created, err := sessSvc.Create(ctx, &session.CreateRequest{
 		AppName:   appName,
 		UserID:    localUser,
 		SessionID: sess.ID,
 		State:     map[string]any{"task_id": t.ID},
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, m := range history {
 		ev := session.NewEvent(ctx, "hydrate")
@@ -356,11 +367,11 @@ func (a *Agents) ensureChatSession(ctx context.Context, appName, assistantAuthor
 			ev.Author = assistantAuthor
 		}
 		ev.LLMResponse.Content = genai.NewContentFromText(m.Content, role)
-		if err := a.sess.AppendEvent(ctx, created.Session, ev); err != nil {
-			return err
+		if err := sessSvc.AppendEvent(ctx, created.Session, ev); err != nil {
+			return nil, err
 		}
 	}
-	return nil
+	return sessSvc, nil
 }
 
 func appendInterviewText(full *strings.Builder, event *session.Event, onToken TokenFn) {
@@ -469,13 +480,12 @@ func interviewerInstruction(t tasks.Task, mode store.Mode) string {
 func mentorInstruction(t tasks.Task, blueprint tasks.LearningBlueprint, phase tasks.LearningPhase) string {
 	s := mentorPrompt
 	replacements := map[string]string{
-		"{{phase_title}}":   phase.Title,
-		"{{phase_goal}}":    phase.Goal,
-		"{{task_title}}":    t.Title,
-		"{{difficulty}}":    fmt.Sprintf("%d", t.Difficulty),
-		"{{prompt_public}}": strings.TrimSpace(t.PromptPublic),
-		"{{objectives}}":    bulletList(blueprint.Objectives),
-		"{{concepts}}":      conceptList(blueprint.Concepts),
+		"{{phase_title}}": phase.Title,
+		"{{phase_goal}}":  phase.Goal,
+		"{{task_title}}":  t.Title,
+		"{{difficulty}}":  fmt.Sprintf("%d", t.Difficulty),
+		"{{objectives}}":  bulletList(blueprint.Objectives),
+		"{{concepts}}":    conceptList(blueprint.Concepts),
 	}
 	for old, value := range replacements {
 		s = strings.ReplaceAll(s, old, value)

@@ -15,7 +15,6 @@
 Цель этапа: {{phase_goal}}
 Задача: {{task_title}}
 Сложность: {{difficulty}}
-Публичный бриф: {{prompt_public}}
 
 Учебные цели:
 {{objectives}}

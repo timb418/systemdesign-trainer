@@ -116,9 +116,7 @@ func buildEvalPayload(sess store.Session, t tasks.Task, msgs []store.Message, to
 		b.WriteByte('\n')
 	}
 	b.WriteString("\nТранскрипт:\n")
-	for _, m := range msgs {
-		fmt.Fprintf(&b, "[%s]\n%s\n\n", m.Role, m.Content)
-	}
+	writeRelevantTranscript(&b, msgs)
 	b.WriteString("Схема (каноническая проекция, не XML):\n")
 	b.WriteString(topo.Human())
 	b.WriteByte('\n')
@@ -141,8 +139,22 @@ func buildComparePayload(t tasks.Task, msgs []store.Message, topo diagram.Topolo
 	b.WriteString("\nСхема кандидата:\n")
 	b.WriteString(topo.Human())
 	b.WriteString("\n\nТранскрипт:\n")
-	for _, m := range msgs {
-		fmt.Fprintf(&b, "[%s]\n%s\n\n", m.Role, m.Content)
-	}
+	writeRelevantTranscript(&b, msgs)
 	return b.String()
+}
+
+func writeRelevantTranscript(b *strings.Builder, msgs []store.Message) {
+	for _, m := range msgs {
+		if m.Role == "system" || isBoardShare(m.Content) {
+			continue
+		}
+		role := m.Role
+		if role == "user" {
+			role = "candidate"
+		} else if role == "assistant" {
+			role = "interviewer"
+		}
+		fmt.Fprintf(b, "[%s] %s\n", role, strings.TrimSpace(m.Content))
+	}
+	b.WriteByte('\n')
 }

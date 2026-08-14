@@ -13,3 +13,6 @@ var comparePrompt string
 
 //go:embed prompts/mentor.md
 var mentorPrompt string
+
+//go:embed prompts/summarizer.md
+var summarizerPrompt string

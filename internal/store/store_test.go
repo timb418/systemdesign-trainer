@@ -44,6 +44,36 @@ func TestSessionRoundtrip(t *testing.T) {
 	}
 }
 
+func TestContextSummaryRoundtrip(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "summary.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	ctx := context.Background()
+	sess, err := st.CreateSession(ctx, "url-shortener-v1", store.ModeFullMock, true, 45)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	empty, err := st.GetContextSummary(ctx, sess.ID)
+	if err != nil || empty.Content != "" {
+		t.Fatalf("empty summary: %+v %v", empty, err)
+	}
+	if err := st.SaveContextSummary(ctx, store.ContextSummary{
+		SessionID: sess.ID, Content: "- принято допущение", ThroughMessageID: 12,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.GetContextSummary(ctx, sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Content != "- принято допущение" || got.ThroughMessageID != 12 {
+		t.Fatalf("summary: %+v", got)
+	}
+}
+
 func TestSolvedToggle(t *testing.T) {
 	dir := t.TempDir()
 	st, err := store.Open(filepath.Join(dir, "t.db"))

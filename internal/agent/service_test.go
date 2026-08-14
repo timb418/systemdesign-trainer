@@ -39,8 +39,11 @@ func TestMentorInstructionDoesNotContainGold(t *testing.T) {
 		strings.Contains(instruction, task.PreferredSolution.Tradeoffs[0]) {
 		t.Fatal("mentor instruction leaked preferred solution")
 	}
-	if !strings.Contains(instruction, phase.Goal) || !strings.Contains(instruction, task.PromptPublic) {
+	if !strings.Contains(instruction, phase.Goal) {
 		t.Fatalf("mentor instruction missing phase-scoped context: %s", instruction)
+	}
+	if strings.Contains(instruction, task.PromptPublic) {
+		t.Fatal("mentor instruction duplicates the public brief already pinned in chat history")
 	}
 }
 

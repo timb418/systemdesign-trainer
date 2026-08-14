@@ -92,6 +92,13 @@ type Message struct {
 	Cost             float64
 }
 
+type ContextSummary struct {
+	SessionID        string
+	Content          string
+	ThroughMessageID int64
+	UpdatedAt        time.Time
+}
+
 type DiagramRevision struct {
 	ID                 int64
 	SessionID          string
@@ -167,6 +174,12 @@ CREATE TABLE IF NOT EXISTS messages (
   prompt_tokens INTEGER NOT NULL DEFAULT 0,
   completion_tokens INTEGER NOT NULL DEFAULT 0,
   cost REAL NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS context_summaries (
+  session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  through_message_id INTEGER NOT NULL,
+  updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS diagram_revisions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -510,6 +523,37 @@ FROM messages WHERE session_id = ? ORDER BY id ASC`, sessionID)
 		out = append(out, m)
 	}
 	return out, rows.Err()
+}
+
+func (s *Store) GetContextSummary(ctx context.Context, sessionID string) (ContextSummary, error) {
+	var summary ContextSummary
+	var updated string
+	err := s.db.QueryRowContext(ctx, `
+SELECT session_id, content, through_message_id, updated_at
+FROM context_summaries WHERE session_id = ?`, sessionID).Scan(
+		&summary.SessionID, &summary.Content, &summary.ThroughMessageID, &updated)
+	if errors.Is(err, sql.ErrNoRows) {
+		return summary, nil
+	}
+	if err != nil {
+		return summary, err
+	}
+	summary.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
+	return summary, nil
+}
+
+func (s *Store) SaveContextSummary(ctx context.Context, summary ContextSummary) error {
+	summary.UpdatedAt = time.Now().UTC()
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO context_summaries (session_id, content, through_message_id, updated_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(session_id) DO UPDATE SET
+  content = excluded.content,
+  through_message_id = excluded.through_message_id,
+  updated_at = excluded.updated_at
+WHERE excluded.through_message_id >= context_summaries.through_message_id`,
+		summary.SessionID, summary.Content, summary.ThroughMessageID, summary.UpdatedAt.Format(time.RFC3339Nano))
+	return err
 }
 
 func (s *Store) SaveDiagram(ctx context.Context, r DiagramRevision) (DiagramRevision, error) {

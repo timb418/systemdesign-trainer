@@ -415,6 +415,7 @@ func (s *Server) streamConversation(ctx context.Context, writeEvt func(any), ses
 	var text string
 	var usage traineragent.Usage
 	var err error
+	history, compactionUsage := s.compactConversationHistory(ctx, sess.ID, history)
 	onToken := func(tok string) {
 		writeEvt(map[string]any{"type": "token", "text": tok})
 	}
@@ -438,6 +439,9 @@ func (s *Server) streamConversation(ctx context.Context, writeEvt func(any), ses
 		writeEvt(map[string]any{"type": "error", "message": err.Error()})
 		return
 	}
+	usage.PromptTokens += compactionUsage.PromptTokens
+	usage.CompletionTokens += compactionUsage.CompletionTokens
+	usage.Cost += compactionUsage.Cost
 	if text == "" {
 		text = "…"
 		writeEvt(map[string]any{"type": "token", "text": text})
