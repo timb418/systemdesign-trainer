@@ -241,3 +241,42 @@ func TestPostBoardShowStreamsShownEvent(t *testing.T) {
 		t.Fatalf("dump missing node/edge counts: %s", text)
 	}
 }
+
+func TestGoldDiagramOnComparePage(t *testing.T) {
+	h := testServer(t)
+	ts := httptest.NewServer(h)
+	t.Cleanup(ts.Close)
+	client := ts.Client()
+
+	form := url.Values{"task_id": {"url-shortener-v1"}, "mode": {"full_mock"}}
+	res, err := client.PostForm(ts.URL+"/sessions", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loc := res.Request.URL.Path
+	res.Body.Close()
+	if res.StatusCode != 200 || !strings.Contains(loc, "/sessions/") {
+		t.Fatalf("start %d loc=%s", res.StatusCode, loc)
+	}
+
+	gold, _ := io.ReadAll(mustGet(t, client, ts.URL+loc+"/gold.xml"))
+	xml := string(gold)
+	if !strings.Contains(xml, "<mxfile") {
+		t.Fatalf("gold.xml missing mxfile: %s", xml)
+	}
+	if !strings.Contains(xml, "Redirect/API Service") {
+		t.Fatalf("gold.xml missing gold node: %s", xml)
+	}
+
+	html, _ := io.ReadAll(mustGet(t, client, ts.URL+loc+"/compare"))
+	page := string(html)
+	if !strings.Contains(page, `class="diagram-frame"`) {
+		t.Fatalf("compare page missing diagram iframe: %s", page)
+	}
+	if !strings.Contains(page, `data-xml-url="`+loc+`/gold.xml"`) {
+		t.Fatalf("compare page missing gold iframe: %s", page)
+	}
+	if !strings.Contains(page, `data-xml-url="`+loc+`/board.xml"`) {
+		t.Fatalf("compare page missing candidate iframe: %s", page)
+	}
+}

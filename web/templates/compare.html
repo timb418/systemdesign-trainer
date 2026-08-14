@@ -6,11 +6,19 @@
   <div class="split">
     <section>
       <h2>Ваша попытка</h2>
-      <pre class="topo">{{.CandidateDump}}</pre>
+      <iframe class="diagram-frame" title="Ваша схема" data-drawio="{{.DrawioURL}}" data-xml-url="/sessions/{{.AttemptID}}/board.xml"></iframe>
+      <details>
+        <summary>Текстовая схема</summary>
+        <pre class="topo">{{.CandidateDump}}</pre>
+      </details>
     </section>
     <section>
       <h2>Эталон</h2>
-      <pre class="topo">{{.GoldDump}}</pre>
+      <iframe class="diagram-frame" title="Эталонная схема" data-drawio="{{.DrawioURL}}" data-xml-url="/sessions/{{.Session.ID}}/gold.xml"></iframe>
+      <details>
+        <summary>Текстовая схема</summary>
+        <pre class="topo">{{.GoldDump}}</pre>
+      </details>
     </section>
   </div>
   <section>

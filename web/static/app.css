@@ -130,15 +130,21 @@ body:has(.session) main {
 .msg .body { white-space: pre-wrap; }
 .composer { display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-shrink: 0; }
 .composer textarea { flex: 1; }
-#board {
+#board, .diagram-frame {
   display: block;
-  flex: 1 1 0;
-  min-height: 0;
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
 }
+#board {
+  flex: 1 1 0;
+  min-height: 0;
+}
+.diagram-frame { min-height: 55vh; }
+.compare .split { min-height: 0; align-items: start; }
+.compare details { margin-top: 0.5rem; }
+.compare summary { cursor: pointer; color: var(--accent); }
 .upload { margin-top: 0.5rem; font-size: 0.85rem; flex-shrink: 0; }
 .timer { font-variant-numeric: tabular-nums; }
 .criteria { list-style: none; padding: 0; display: grid; gap: 0.75rem; }

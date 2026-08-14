@@ -1,3 +1,59 @@
+function mountDrawioIframe(iframe, opts) {
+  const drawio = opts.drawio || "";
+  const xmlUrl = opts.xmlUrl || "";
+  if (!iframe || !drawio || !xmlUrl) {
+    return { isReady: () => false, load() {}, exportXml() {} };
+  }
+  let params = "embed=1&proto=json&spin=1&saveAndExit=0&noSaveBtn=1&noExitBtn=1";
+  if (opts.lightbox) {
+    params += "&lightbox=1&chrome=0&nav=1&layers=1";
+  } else {
+    params += "&ui=sketch&libraries=1";
+  }
+  const extra = drawio.startsWith("/") ? "&offline=1" : "";
+  iframe.src = drawio + (drawio.includes("?") ? "&" : "?") + params + extra;
+
+  let ready = false;
+  window.addEventListener("message", (evt) => {
+    if (evt.source !== iframe.contentWindow) return;
+    let msg;
+    try { msg = JSON.parse(evt.data); } catch { return; }
+    if (msg.event === "init") {
+      fetch(xmlUrl)
+        .then((r) => r.text())
+        .then((xml) => {
+          iframe.contentWindow.postMessage(JSON.stringify({
+            action: "load",
+            xml,
+            autosave: opts.autosave ? 1 : 0,
+          }), "*");
+          ready = true;
+          if (opts.onReady) opts.onReady();
+        });
+    }
+    if (opts.autosave && msg.event === "autosave" && msg.xml && opts.onAutosave) {
+      opts.onAutosave(msg.xml);
+    }
+    if (opts.onEvent) opts.onEvent(msg);
+  });
+
+  return {
+    isReady: () => ready,
+    load(xml) {
+      if (!iframe.contentWindow) return;
+      iframe.contentWindow.postMessage(JSON.stringify({
+        action: "load",
+        xml,
+        autosave: opts.autosave ? 1 : 0,
+      }), "*");
+    },
+    exportXml() {
+      if (!iframe.contentWindow) return;
+      iframe.contentWindow.postMessage(JSON.stringify({ action: "export", format: "xml" }), "*");
+    },
+  };
+}
+
 (() => {
   const forms = document.querySelectorAll("form[data-wait-title]");
   if (!forms.length) return;
@@ -271,39 +327,26 @@
 
   if (!iframe) return;
 
-  const drawio = root.dataset.drawio;
-  const params = "embed=1&proto=json&spin=1&ui=sketch&libraries=1&saveAndExit=0&noSaveBtn=1&noExitBtn=1";
-  const extra = drawio.startsWith("/") ? "&offline=1" : "";
-  iframe.src = drawio + (drawio.includes("?") ? "&" : "?") + params + extra;
-
-  let ready = false;
   let pendingShow = false;
   let showing = false;
-  window.addEventListener("message", (evt) => {
-    if (evt.source !== iframe.contentWindow) return;
-    let msg;
-    try { msg = JSON.parse(evt.data); } catch { return; }
-    if (msg.event === "init") {
-      fetch(root.dataset.xmlUrl)
-        .then((r) => r.text())
-        .then((xml) => {
-          iframe.contentWindow.postMessage(JSON.stringify({ action: "load", xml, autosave: 1 }), "*");
-          ready = true;
-        });
-    }
-    if (msg.event === "autosave" && msg.xml) {
+  const board = mountDrawioIframe(iframe, {
+    drawio: root.dataset.drawio,
+    xmlUrl: root.dataset.xmlUrl,
+    autosave: true,
+    onAutosave(xml) {
       fetch("/sessions/" + sessionId + "/board", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ xml: msg.xml, show: false }),
+        body: JSON.stringify({ xml, show: false }),
       });
-    }
-    if (msg.event === "export" && pendingShow) {
+    },
+    onEvent(msg) {
+      if (msg.event !== "export" || !pendingShow) return;
       const xml = msg.xml || msg.data;
       if (!xml) return;
       pendingShow = false;
       showBoard(xml);
-    }
+    },
   });
 
   async function showBoard(xml) {
@@ -355,9 +398,9 @@
 
   if (showBtn) {
     showBtn.addEventListener("click", () => {
-      if (!ready || showing || pendingShow) return;
+      if (!board.isReady() || showing || pendingShow) return;
       pendingShow = true;
-      iframe.contentWindow.postMessage(JSON.stringify({ action: "export", format: "xml" }), "*");
+      board.exportXml();
     });
   }
 
@@ -375,9 +418,18 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ xml, show: false }),
       });
-      if (ready && iframe.contentWindow) {
-        iframe.contentWindow.postMessage(JSON.stringify({ action: "load", xml, autosave: 1 }), "*");
-      }
+      if (board.isReady()) board.load(xml);
     });
   }
+})();
+
+(() => {
+  document.querySelectorAll("iframe[data-drawio][data-xml-url]").forEach((el) => {
+    if (el.id === "board") return;
+    mountDrawioIframe(el, {
+      drawio: el.dataset.drawio,
+      xmlUrl: el.dataset.xmlUrl,
+      lightbox: true,
+    });
+  });
 })();

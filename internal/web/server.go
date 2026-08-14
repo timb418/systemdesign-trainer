@@ -63,6 +63,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /sessions", s.startSession)
 	mux.HandleFunc("GET /sessions/{id}", s.showSession)
 	mux.HandleFunc("GET /sessions/{id}/board.xml", s.boardXML)
+	mux.HandleFunc("GET /sessions/{id}/gold.xml", s.goldXML)
 	mux.HandleFunc("POST /sessions/{id}/messages", s.postMessage)
 	mux.HandleFunc("POST /sessions/{id}/board", s.postBoard)
 	mux.HandleFunc("POST /sessions/{id}/board/upload", s.uploadBoard)
@@ -230,6 +231,26 @@ func (s *Server) boardXML(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	_, _ = io.WriteString(w, xmlText)
+}
+
+func (s *Server) goldXML(w http.ResponseWriter, r *http.Request) {
+	sess, err := s.store.GetSession(r.Context(), r.PathValue("id"))
+	if err != nil {
+		http.Error(w, err.Error(), 404)
+		return
+	}
+	t, ok := s.bank.Get(sess.TaskID)
+	if !ok || t.PreferredSolution.Diagram == "" {
+		http.Error(w, "нет эталонной схемы", 404)
+		return
+	}
+	raw, err := s.bank.ReadDiagram(t.PreferredSolution.Diagram)
+	if err != nil {
+		http.Error(w, err.Error(), 404)
+		return
+	}
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	_, _ = io.WriteString(w, raw)
 }
 
 func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
@@ -479,6 +500,8 @@ func (s *Server) compare(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "compare.html", map[string]any{
 		"Title":         "Эталон",
 		"Session":       orig,
+		"AttemptID":     attempt.ID,
+		"DrawioURL":     s.drawio,
 		"CandidateDump": candDump,
 		"GoldDump":      goldDump,
 		"GoldNarrative": t.PreferredSolution.Narrative,
