@@ -50,7 +50,7 @@ func New(bank *tasks.Bank, set *settings.Store) *Agents {
 	return &Agents{bank: bank, set: set, sess: session.InMemoryService()}
 }
 
-func (a *Agents) model(ctx context.Context, modelID, apiKey string) (model.LLM, error) {
+func (a *Agents) model(ctx context.Context, modelID, apiKey, effort string) (model.LLM, error) {
 	return openaimodel.NewModel(ctx, modelID, &openaimodel.ClientConfig{
 		APIKey:  apiKey,
 		BaseURL: settings.OpenRouterBaseURL,
@@ -60,6 +60,10 @@ func (a *Agents) model(ctx context.Context, modelID, apiKey string) (model.LLM, 
 			option.WithJSONSet("provider", map[string]any{
 				"order":           settings.DefaultProviderOrder,
 				"allow_fallbacks": true,
+			}),
+			option.WithJSONSet("reasoning", map[string]any{
+				"effort":  settings.NormalizeReasoningEffort(effort),
+				"enabled": true,
 			}),
 		},
 	})
@@ -152,7 +156,7 @@ func (a *Agents) Interview(ctx context.Context, sess store.Session, t tasks.Task
 	if err != nil {
 		return "", Usage{}, err
 	}
-	llm, err := a.model(ctx, cfg.InterviewerModel, key)
+	llm, err := a.model(ctx, cfg.InterviewerModel, key, cfg.ReasoningEffort)
 	if err != nil {
 		return "", Usage{}, err
 	}
@@ -218,7 +222,7 @@ func (a *Agents) oneShot(ctx context.Context, app string, makeAgent func(context
 	if evaluator {
 		modelID = cfg.EvaluatorModel
 	}
-	llm, err := a.model(ctx, modelID, key)
+	llm, err := a.model(ctx, modelID, key, cfg.ReasoningEffort)
 	if err != nil {
 		return "", Usage{}, err
 	}

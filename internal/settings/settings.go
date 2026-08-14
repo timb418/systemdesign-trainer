@@ -13,17 +13,32 @@ const (
 	DefaultInterviewerModel = "deepseek/deepseek-v4-flash-0731"
 	DefaultEvaluatorModel   = "deepseek/deepseek-v4-flash-0731"
 	DefaultTimerMinutes     = 45
+	DefaultReasoningEffort  = "high"
 	OpenRouterBaseURL       = "https://openrouter.ai/api/v1"
 )
 
 // DefaultProviderOrder is OpenRouter provider.order: try these slugs first, then other hosts of the same model.
 var DefaultProviderOrder = []string{"coreweave", "streamlake", "decart", "deepinfra"}
 
+// ReasoningEfforts is OpenRouter reasoning.effort without none (thinking is always on).
+var ReasoningEfforts = []string{"max", "xhigh", "high", "medium", "low", "minimal"}
+
 type Settings struct {
 	InterviewerModel string `json:"interviewer_model"`
 	EvaluatorModel   string `json:"evaluator_model"`
+	ReasoningEffort  string `json:"reasoning_effort"`
 	TimerEnabled     bool   `json:"timer_enabled"`
 	TimerMinutes     int    `json:"timer_minutes"`
+}
+
+func NormalizeReasoningEffort(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	for _, v := range ReasoningEfforts {
+		if s == v {
+			return v
+		}
+	}
+	return DefaultReasoningEffort
 }
 
 type Store struct {
@@ -47,6 +62,7 @@ func (s *Store) Load() (Settings, error) {
 	cfg := Settings{
 		InterviewerModel: DefaultInterviewerModel,
 		EvaluatorModel:   DefaultEvaluatorModel,
+		ReasoningEffort:  DefaultReasoningEffort,
 		TimerEnabled:     true,
 		TimerMinutes:     DefaultTimerMinutes,
 	}
@@ -69,6 +85,7 @@ func (s *Store) Load() (Settings, error) {
 	if cfg.TimerMinutes <= 0 {
 		cfg.TimerMinutes = DefaultTimerMinutes
 	}
+	cfg.ReasoningEffort = NormalizeReasoningEffort(cfg.ReasoningEffort)
 	return cfg, nil
 }
 
@@ -82,6 +99,7 @@ func (s *Store) Save(cfg Settings) error {
 	if cfg.TimerMinutes <= 0 {
 		cfg.TimerMinutes = DefaultTimerMinutes
 	}
+	cfg.ReasoningEffort = NormalizeReasoningEffort(cfg.ReasoningEffort)
 	b, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err

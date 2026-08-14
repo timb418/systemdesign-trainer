@@ -15,6 +15,14 @@
       <input name="evaluator_model" value="{{.Settings.EvaluatorModel}}" required>
     </label>
     <p class="hint">Slug модели OpenRouter. Приоритет провайдеров задаётся приложением: CoreWeave → StreamLake → Decart → DeepInfra, затем остальные хосты той же модели.</p>
+    <label>Усилие рассуждения
+      <select name="reasoning_effort">
+        {{range .ReasoningEfforts}}
+        <option value="{{.}}" {{if eq $.Settings.ReasoningEffort .}}selected{{end}}>{{.}}</option>
+        {{end}}
+      </select>
+    </label>
+    <p class="hint">Thinking всегда включён. Ступени OpenRouter: max → xhigh → high → medium → low → minimal. У DeepSeek V4 Flash нативны high и xhigh (xhigh = max).</p>
     <label class="check">
       <input type="checkbox" name="timer_enabled" value="1" {{if .Settings.TimerEnabled}}checked{{end}}>
       Таймер сессии

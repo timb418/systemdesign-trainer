@@ -110,6 +110,20 @@ func TestSettingsDefaultModels(t *testing.T) {
 	if !strings.Contains(html, "CoreWeave") || !strings.Contains(html, "DeepInfra") {
 		t.Fatalf("settings page missing provider hint: %s", html)
 	}
+	if !strings.Contains(html, `name="reasoning_effort"`) {
+		t.Fatalf("settings page missing reasoning_effort select: %s", html)
+	}
+	if !strings.Contains(html, `value="high" selected`) && !strings.Contains(html, `value="high"  selected`) {
+		t.Fatalf("settings page missing default high effort: %s", html)
+	}
+	for _, effort := range settings.ReasoningEfforts {
+		if !strings.Contains(html, `value="`+effort+`"`) {
+			t.Fatalf("settings page missing effort %q: %s", effort, html)
+		}
+	}
+	if strings.Contains(html, `value="none"`) {
+		t.Fatal("settings page must not offer none (thinking is mandatory)")
+	}
 }
 
 func TestSettingsMasksKey(t *testing.T) {
@@ -120,6 +134,7 @@ func TestSettingsMasksKey(t *testing.T) {
 		"api_key":           {"sk-or-test-secret-key"},
 		"interviewer_model": {"openai/gpt-4o-mini"},
 		"evaluator_model":   {"openai/gpt-4o"},
+		"reasoning_effort":  {"xhigh"},
 		"timer_enabled":     {"1"},
 		"timer_minutes":     {"45"},
 	}
@@ -134,5 +149,34 @@ func TestSettingsMasksKey(t *testing.T) {
 	}
 	if !strings.Contains(string(body), "••••") {
 		t.Fatalf("expected mask: %s", body)
+	}
+	if !strings.Contains(string(body), `value="xhigh" selected`) && !strings.Contains(string(body), `value="xhigh"  selected`) {
+		t.Fatalf("expected saved xhigh effort: %s", body)
+	}
+}
+
+func TestSettingsRejectsNoneEffort(t *testing.T) {
+	h := testServer(t)
+	ts := httptest.NewServer(h)
+	t.Cleanup(ts.Close)
+	form := url.Values{
+		"interviewer_model": {settings.DefaultInterviewerModel},
+		"evaluator_model":   {settings.DefaultEvaluatorModel},
+		"reasoning_effort":  {"none"},
+		"timer_enabled":     {"1"},
+		"timer_minutes":     {"45"},
+	}
+	res, err := ts.Client().PostForm(ts.URL+"/settings", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	html := string(body)
+	if strings.Contains(html, `value="none" selected`) {
+		t.Fatal("none effort must not persist")
+	}
+	if !strings.Contains(html, `value="high" selected`) && !strings.Contains(html, `value="high"  selected`) {
+		t.Fatalf("none should fall back to high: %s", html)
 	}
 }

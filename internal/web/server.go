@@ -533,12 +533,7 @@ func (s *Server) history(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) settingsGet(w http.ResponseWriter, r *http.Request) {
 	cfg, _ := s.set.Load()
-	s.render(w, "settings.html", map[string]any{
-		"Title":    "Настройки",
-		"Settings": cfg,
-		"Masked":   s.set.MaskedKey(),
-		"Saved":    r.URL.Query().Get("saved") == "1",
-	})
+	s.render(w, "settings.html", s.settingsView(cfg, r.URL.Query().Get("saved") == "1", ""))
 }
 
 func (s *Server) settingsPost(w http.ResponseWriter, r *http.Request) {
@@ -546,21 +541,33 @@ func (s *Server) settingsPost(w http.ResponseWriter, r *http.Request) {
 	cfg, _ := s.set.Load()
 	cfg.InterviewerModel = strings.TrimSpace(r.FormValue("interviewer_model"))
 	cfg.EvaluatorModel = strings.TrimSpace(r.FormValue("evaluator_model"))
+	cfg.ReasoningEffort = settings.NormalizeReasoningEffort(r.FormValue("reasoning_effort"))
 	cfg.TimerEnabled = r.FormValue("timer_enabled") == "1"
 	if n, err := strconv.Atoi(r.FormValue("timer_minutes")); err == nil {
 		cfg.TimerMinutes = n
 	}
 	if err := s.set.Save(cfg); err != nil {
-		s.render(w, "settings.html", map[string]any{"Title": "Настройки", "Settings": cfg, "Masked": s.set.MaskedKey(), "Err": err.Error()})
+		s.render(w, "settings.html", s.settingsView(cfg, false, err.Error()))
 		return
 	}
 	if k := r.FormValue("api_key"); strings.TrimSpace(k) != "" && !strings.Contains(k, "••••") {
 		if err := s.set.SaveAPIKey(k); err != nil {
-			s.render(w, "settings.html", map[string]any{"Title": "Настройки", "Settings": cfg, "Err": err.Error()})
+			s.render(w, "settings.html", s.settingsView(cfg, false, err.Error()))
 			return
 		}
 	}
 	http.Redirect(w, r, "/settings?saved=1", http.StatusSeeOther)
+}
+
+func (s *Server) settingsView(cfg settings.Settings, saved bool, errMsg string) map[string]any {
+	return map[string]any{
+		"Title":            "Настройки",
+		"Settings":         cfg,
+		"Masked":           s.set.MaskedKey(),
+		"Saved":            saved,
+		"Err":              errMsg,
+		"ReasoningEfforts": settings.ReasoningEfforts,
+	}
 }
 
 func localDrawioDir() string {
