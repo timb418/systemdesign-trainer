@@ -1,0 +1,66 @@
+id: payment-processing-platform
+title: Глобальная платёжная платформа
+difficulty: 5
+architecture_types:
+  - payments
+  - queues
+  - geo
+  - api_gateway
+duration_min: 90
+canvas: sketch
+starter_diagram: diagrams/payment-processing-platform.starter.drawio
+prompt_public: |
+  На доске показан прямой вызов одного платёжного провайдера из checkout.
+  Превратите его в глобальную платформу для merchants, нескольких методов оплаты и финансовой сверки. Начните с границ системы.
+hidden:
+  functional:
+    - "Payment Intent с authorize, capture, cancel, refund и частичными операциями"
+    - "Маршрутизация по нескольким acquirer и способам оплаты"
+    - "Идемпотентные merchant API и проверенные provider webhooks"
+    - "Double-entry ledger, fees, settlement и payout merchant-ам"
+    - "Dispute/chargeback и ручная reconciliation расхождений"
+    - "Токенизация платёжных реквизитов и 3-D Secure flow"
+  nonfunctional:
+    - "Ни один retry не создаёт второй логический денежный эффект"
+    - "p99 API create < 250 мс; card authorization end-to-end < 3 секунды"
+    - "Доступность приёма платежа 99.999%, ledger RPO 0"
+    - "PCI scope минимизирован, PAN не попадает в общие сервисы и логи"
+    - "Финансовые операции воспроизводимы и аудитируются 10 лет"
+  scale:
+    - "50k merchants, 150 валют и 30 регионов"
+    - "Средняя нагрузка 250k операций/с, пик 1 млн/с"
+    - "5 млрд provider webhooks и clearing records в день"
+    - "200 подключений к acquirer, банк и wallet-провайдерам"
+    - "Ledger хранит 2 трлн postings; daily settlement до 100 млрд USD"
+reveal_on_question:
+  - id: functional
+    keywords: ["intent", "authorize", "capture", "refund", "маршрут", "ledger", "settlement", "payout", "dispute", "token", "3ds"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["идемпот", "дубликат", "latency", "доступн", "rpo", "pci", "pan", "аудит", "гаранти"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["merchant", "валют", "регион", "qps", "webhook", "провайдер", "posting", "settlement", "масштаб"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Merchant создаёт POST /v1/payment_intents с Idempotency-Key; Intent хранит immutable amount/currency, merchant, method token и state version. Уникальность merchant+key и hash запроса обеспечивает replay. Card details поступают только в изолированный PCI vault через hosted fields, наружу выходит network token. Payment orchestrator исполняет versioned state machine REQUIRES_ACTION→PROCESSING→AUTHORIZED→CAPTURED и пишет переход плюс outbox в одной транзакции. Connector получает стабильный operation_id для authorize/capture/refund; timeout означает UNKNOWN и запускает status query/reconciliation, но не новый логический вызов.
+
+    Routing engine выбирает connector по методу, региону, стоимости, успеху и residency, однако sticky route сохраняется для capture/refund. Connector-ы изолированы bulkhead-ами, rate limits и circuit breaker. Webhook ingress проверяет mTLS/signature, сохраняет сырой payload, дедуплицирует provider_event_id и доставляет нормализованное событие. Intent store и ledger не изображаются одной магической транзакцией: переход authorize/capture/refund атомарно пишет FinancialFact(fact_id=operation_id+transition, amount, currency, accounts) в intent outbox. Ledger consumer в одной serializable транзакции вставляет inbox с unique fact_id и balanced immutable postings в processor clearing, merchant payable, fee, reserve и cash accounts. Повторная доставка возвращает прежний ledger_transaction_id; reconciler сравнивает terminal intent transitions с ledger inbox и переиздаёт отсутствующие facts. Settlement importer сопоставляет provider records с operation_id; breaks идут в case management, payout создаётся только из settled available balance.
+
+    Intent store шардируется по merchant_id и region, ledger — по legal_entity/currency с синхронной репликацией трёх зон и fenced writer. Межрегиональные команды маршрутизируются в owning region; read replica обслуживает status, но денежные переходы читают leader. События в analytics доставляются CDC и не являются источником денег. При региональном отказе control plane продвигает реплику с подтверждённым epoch; неоднозначные операции замораживаются до reconciliation. Нагрузку выдерживают partitioned queues, batching ledger postings и независимое масштабирование connector-ов. Метрики: authorization latency/success по route, unknown age, idempotency conflicts, webhook lag, ledger imbalance invariant, settlement break amount, payout delay, connector saturation и failover epoch. Сквозной audit связывает merchant key, intent, operation, provider reference и postings, редактирование истории запрещено.
+  tradeoffs:
+    - "Оркестратор централизует инварианты, но становится критическим control point."
+    - "Динамический smart routing повышает approval, sticky route упрощает последующие операции."
+    - "Асинхронный operation-keyed handoff между intent и ledger переживает сбои без dual write, но создаёт измеримый posting lag."
+    - "Активный multi-region API повышает доступность, однако один owning region денег снижает split-brain риск."
+    - "Нормализация connector API ускоряет интеграции, но не должна скрывать уникальные состояния методов оплаты."
+    - "Асинхронный статус переживает долгие методы, но требует webhook, polling и понятного merchant UX."
+  diagram: diagrams/payment-processing-platform.gold.drawio
+rubric_overrides:
+  - "Кандидат отделяет Payment Intent, provider operation, ledger posting и settlement record."
+  - "UNKNOWN после timeout и sticky routing обработаны явно."
+  - "PAN изолирован vault-ом, PCI boundary видна на схеме."
+  - "Ledger balanced и не зависит от analytics event stream."
+  - "Intent-to-ledger handoff использует outbox, unique financial fact inbox и reconciliation."
+  - "Региональный failover денег использует ownership, epoch и reconciliation."

@@ -1,0 +1,87 @@
+id: multi-device-messenger
+title: Мессенджер на нескольких устройствах
+difficulty: 5
+architecture_types:
+  - chat
+  - queues
+  - identity_auth
+duration_min: 60
+canvas: blank
+prompt_public: |
+  Дан мессенджер, который хранит один общий offset пользователя. Перепроектируйте синхронизацию для телефона, ноутбука и веба, включая офлайн и переустановку.
+hidden:
+  functional:
+    - "Независимо доставлять сообщения на каждое устройство"
+    - "Синхронизировать read state и удаления"
+    - "Догонять историю после долгого offline"
+    - "Поддерживать привязку и отзыв устройства"
+    - "Не отправлять старому устройству данные после revoke"
+  nonfunctional:
+    - "Online delivery p95 менее 700 мс"
+    - "Gap sync 10k событий завершается за 30 секунд"
+    - "До 10 устройств пользователя"
+    - "Device revoke вступает в силу за 5 секунд"
+    - "История не теряется при compaction sync log"
+  scale:
+    - "60 млн DAU и 180 млн активных устройств"
+    - "Пик 600k message events/с"
+    - "15% устройств offline более 7 дней"
+    - "Sync log хранит 90 дней, история — 7 лет"
+    - "Одно устройство может отставать на 1 млн событий"
+reveal_on_question:
+  - id: functional
+    keywords: ["per-device cursor", "sync envelope", "read state", "device revoke", "gap sync", "reinstall", "snapshot fallback"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["online delivery", "gap sync deadline", "device revoke latency", "compaction safety", "history durability"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["active devices", "message events", "offline devices", "sync retention", "million event lag", "dau"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    Каждое устройство имеет device_id, credentials и свой sync cursor.
+    Sync API возвращает ordered envelopes после cursor; snapshot endpoint восстанавливает состояние, если cursor старше retention.
+    Ack отделён по device.
+    Модель данных.
+    User sync log содержит monotonic user_seq и references на message/control events.
+    Device state хранит ack_seq, key epoch, revoked_at.
+    Conversation history остаётся источником истины; snapshot фиксирует memberships и high watermarks.
+    Основные потоки.
+    Message commit порождает события в sync logs обоих пользователей.
+    Online router best-effort будит devices; каждое затем pull-ит gap и ack-ает.
+    Read receipt создаёт control event, compactor сворачивает монотонные watermarks.
+    Масштабирование.
+    Sync log шардируется по user_id, сегментируется и compaction-aware.
+    Активные устройства читают replicas, сильно отставшие получают snapshot плюс tail.
+    Fanout на десять devices ограничен metadata notifications, не копированием body.
+    Согласованность.
+    user_seq задаёт порядок синхронизации, conversation_seq — порядок чата; их нельзя смешивать.
+    Device ack не двигает другие devices.
+    Revoke повышает key epoch и ACL, старый token немедленно перестаёт читать snapshot/tail.
+    Отказы и восстановление.
+    Стартовый общий offset заменяется per-device cursor.
+    Потерянный ack вызывает повтор envelopes, которые идемпотентны.
+    Если log истёк, сервер отвечает cursor_too_old и versioned snapshot; failover sequencer использует fencing.
+    Наблюдаемость.
+    Наблюдаются lag distribution по device, duplicate apply, snapshot rate/duration, cursor-too-old, revoked access attempts, sync-log compaction safety и online wake misses.
+    Synthetic devices чередуют offline/reinstall/revoke.
+    Практические решения.
+    Перед удалением segment compactor проверяет retention и snapshot coverage, но не ждёт навсегда забытое device.
+    Новая установка получает новый identity.
+    E2EE key distribution, если включена, идёт control events с epoch.
+  tradeoffs:
+    - "Общий offset против per-device cursors"
+    - "Длинный log retention против snapshot cost"
+    - "Push payload против wake-and-pull"
+    - "User sync sequence против conversation sequence"
+    - "Удаление старых segments против поддержки очень долгого offline"
+    - "Немедленный revoke против offline encrypted copies"
+  diagram: diagrams/multi-device-messenger.gold.drawio
+rubric_overrides:
+  - "Кандидат обязан устранить единый пользовательский offset"
+  - "Оценивается различие user_seq и conversation_seq"
+  - "Нужен cursor-too-old snapshot protocol"
+  - "Device revoke требует credentials и key epoch"
+  - "Compaction не должна терять восстанавливаемое состояние"

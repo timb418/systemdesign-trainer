@@ -1,0 +1,59 @@
+id: delayed-job-scheduler
+title: Планировщик отложенных задач
+difficulty: 3
+architecture_types:
+  - queues
+  - key_value_store
+duration_min: 55
+canvas: blank
+prompt_public: |
+  Спроектируйте платформу, которая запускает задания в заданный момент времени.
+  Клиент передаёт задачу и время запуска, воркеры исполняют её позже. Начните с вопросов к требованиям.
+hidden:
+  functional:
+    - "Создание, отмена и перенос одноразового задания до начала исполнения"
+    - "Периодические задания по cron с указанной временной зоной"
+    - "Выдача готовых заданий воркерам с lease и повторными попытками"
+    - "Dead-letter queue и просмотр истории попыток"
+    - "Идемпотентный create по ключу клиента"
+  nonfunctional:
+    - "At-least-once исполнение; обработчик использует job_id для дедупликации"
+    - "99.9% заданий попадают воркеру не позже чем через 2 секунды от due_at"
+    - "Доступность управляющего API 99.95%"
+    - "Потеря подтверждённого задания при отказе зоны недопустима"
+    - "Перенос и отмена линеаризуемы относительно ещё не начатого задания"
+  scale:
+    - "300 млн активных заданий, горизонт планирования до одного года"
+    - "Средний create 15k/с, пик 60k/с"
+    - "Пик наступления срока 200k заданий/с в начале часа"
+    - "Payload до 64 КБ, средний 1 КБ"
+    - "20 региональных пулов воркеров и 90 дней истории"
+reveal_on_question:
+  - id: functional
+    keywords: ["функционал", "отмен", "перенос", "cron", "период", "retry", "истори", "идемпот"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["точност", "задержк", "гаранти", "доступн", "потер", "консистент", "sla"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["qps", "масштаб", "сколько", "пик", "payload", "горизонт", "регион", "retention"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    API поддерживает POST /jobs с idempotency_key, PATCH /jobs/{id} для reschedule и DELETE для cancel. Запись Job содержит job_id, tenant_id, due_at UTC, timezone, cron_expression, payload_ref, state, generation и retry_policy. Транзакционный metadata store шардируется по hash(job_id), реплицируется между зонами quorum-записью и обеспечивает compare-and-swap по generation. Payload больше нескольких килобайт уходит в object storage, а запись хранит ссылку и checksum.
+
+    Индекс времени строится отдельно: ближайшие минуты размещаются в распределённом timing wheel, дальние задания — в упорядоченных bucket-ах по часу и shard. Scanner каждой партиции владеет lease с fencing epoch, заранее загружает следующий bucket и переводит due job из SCHEDULED в ENQUEUED условной транзакцией. Затем transactional outbox публикует job_id в ready queue; relay можно повторять без создания нового логического запуска. Воркеры получают lease, heartbeat-ят долгую попытку и завершают её CAS-переходом. Ошибка создаёт retry с exponential backoff и jitter, исчерпание попыток ведёт в DLQ.
+
+    Отмена или перенос увеличивает generation. Scanner и worker обязаны сверять поколение, поэтому старая запись timing wheel безопасно игнорируется. Для cron после успешной постановки текущего запуска вычисляется следующий due_at с явными правилами DST; пропущенные окна имеют политику skip или catch-up. При падении scanner другой узел получает lease и перечитывает bucket; at-least-once сохраняется, а exactly-once не обещается. Пики сглаживаются partition-ами ready queue, admission control и tenant quotas. Метрики включают schedule lag, due-to-enqueue p99, scan lag, bucket size, lease steals, retry/DLQ rate, clock skew и outbox age; audit log и trace по job_id объясняют каждое изменение состояния.
+  tradeoffs:
+    - "Timing wheel для близких сроков экономит CPU, но дальний горизонт требует отдельного durable-индекса."
+    - "Шардирование по job_id упрощает изменения, но временной индекс приходится поддерживать асинхронно через outbox."
+    - "At-least-once переживает сбои, но переносит дедупликацию в обработчики."
+    - "Проверка generation оставляет устаревшие записи до уборки, зато отмена не требует дорогого поиска по wheel."
+    - "Catch-up cron сохраняет запуски после простоя, но способен вызвать лавину; skip безопаснее для нагрузки."
+  diagram: diagrams/delayed-job-scheduler.gold.drawio
+rubric_overrides:
+  - "Кандидат разделяет долговечное хранение задания, временной индекс и ready queue."
+  - "Кандидат решает гонку cancel/reschedule со scanner через generation или эквивалентный fencing."
+  - "Кандидат обсуждает clock skew, DST и всплеск заданий на границе часа."
+  - "Наблюдаемость содержит schedule lag, а не только QPS API."

@@ -1,0 +1,33 @@
+<mxfile host="app.diagrams.net"><diagram id="live" name="Эталон"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="creator" value="Creator Encoder" vertex="1" parent="1"><mxGeometry x="20" y="80" width="120" height="50" as="geometry"/></mxCell>
+<mxCell id="ingest" value="Primary and Backup Ingest" vertex="1" parent="1"><mxGeometry x="180" y="80" width="160" height="50" as="geometry"/></mxCell>
+<mxCell id="mlog" value="Replicated Media Log" style="shape=process" vertex="1" parent="1"><mxGeometry x="390" y="80" width="150" height="60" as="geometry"/></mxCell>
+<mxCell id="trans" value="ABR Transcoders&#xa;+ standby/replay" vertex="1" parent="1"><mxGeometry x="570" y="30" width="160" height="60" as="geometry"/></mxCell>
+<mxCell id="pack" value="Epoch-aware CMAF Packager" vertex="1" parent="1"><mxGeometry x="570" y="130" width="170" height="50" as="geometry"/></mxCell>
+<mxCell id="origin" value="Origin Shields" vertex="1" parent="1"><mxGeometry x="770" y="130" width="120" height="50" as="geometry"/></mxCell>
+<mxCell id="cdn" value="Multi-CDN" vertex="1" parent="1"><mxGeometry x="940" y="130" width="110" height="50" as="geometry"/></mxCell>
+<mxCell id="viewer" value="Live Players" vertex="1" parent="1"><mxGeometry x="1100" y="130" width="110" height="50" as="geometry"/></mxCell>
+<mxCell id="rec" value="VOD Recorder" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="770" y="240" width="120" height="60" as="geometry"/></mxCell>
+<mxCell id="coord" value="Session Coordinator&#xa;epoch + fencing" vertex="1" parent="1"><mxGeometry x="180" y="190" width="160" height="60" as="geometry"/></mxCell>
+<mxCell id="chat" value="Chat Pipeline&#xa;durable log + fan-out" style="shape=process" vertex="1" parent="1"><mxGeometry x="940" y="240" width="150" height="60" as="geometry"/></mxCell>
+<mxCell id="count" value="Viewer Count&#xa;heartbeat + HLL" vertex="1" parent="1"><mxGeometry x="1100" y="240" width="130" height="60" as="geometry"/></mxCell>
+<mxCell id="control" value="Stream Control API" vertex="1" parent="1"><mxGeometry x="20" y="190" width="120" height="50" as="geometry"/></mxCell>
+<mxCell id="playback" value="Playback Auth API" vertex="1" parent="1"><mxGeometry x="770" y="30" width="130" height="50" as="geometry"/></mxCell>
+<mxCell id="e1" value="SRT publish epoch" edge="1" parent="1" source="creator" target="ingest"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e2" value="fenced contribution" edge="1" parent="1" source="ingest" target="mlog"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e3" value="replayable frames" edge="1" parent="1" source="mlog" target="trans"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e4" value="aligned renditions" edge="1" parent="1" source="trans" target="pack"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e5" value="chunks and manifest" edge="1" parent="1" source="pack" target="origin"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e6" value="cache fill" edge="1" parent="1" source="origin" target="cdn"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e7" value="LL-HLS playback" edge="1" parent="1" source="cdn" target="viewer"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e8" value="archive chunks" edge="1" parent="1" source="pack" target="rec"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e9" value="source health / failover" edge="1" parent="1" source="ingest" target="coord"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e10" value="fenced active epoch" edge="1" parent="1" source="coord" target="mlog"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e11" value="independent chat" edge="1" parent="1" source="viewer" target="chat"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e12" value="playback heartbeats" edge="1" parent="1" source="viewer" target="count"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e13" value="create stream + endpoints" edge="1" parent="1" source="creator" target="control"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e14" value="stream state + epoch" edge="1" parent="1" source="control" target="coord"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e15" value="monotonic sequence fence" edge="1" parent="1" source="coord" target="pack"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e16" value="signed playback cookie" edge="1" parent="1" source="playback" target="viewer"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram></mxfile>

@@ -1,0 +1,85 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="cloud-drive-sync-gold" name="Эталон">
+    <mxGraphModel dx="1200" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="700">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="n0" value="Desktop/Mobile Clients" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n1" value="Sync API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="260" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n2" value="Metadata Transaction Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="480" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n3" value="Metadata DB" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="700" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n4" value="Change Log" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="920" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n5" value="Delta Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="240" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n6" value="Blob Storage" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="260" y="240" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n7" value="Upload Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="480" y="240" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n8" value="ACL Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="700" y="240" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n9" value="Snapshot Builder" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="920" y="240" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n10" value="Download Signer / Blob Gateway&#xa;ACL epoch revoke cache" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="480" y="400" width="190" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="e0" value="resumable blob" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n0" target="n7">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" value="immutable content" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n7" target="n6">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" value="metadata op" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n0" target="n1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" value="base_version commit" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" value="node update" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n2" target="n3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" value="outbox delta" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n2" target="n4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" value="cursor read" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n5" target="n4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" value="batch changes" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n5" target="n0">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8" value="ACL epoch" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n8" target="n1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e9" value="fixed revision read" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n3" target="n9">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e10" value="snapshot manifest + frontier" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n9" target="n5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e11" value="authorized download" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n0" target="n10">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e12" value="versioned blob GET" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n10" target="n6">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e13" value="epoch revoke ≤10s" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n8" target="n10">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,83 @@
+id: group-chat
+title: Групповой чат
+difficulty: 3
+architecture_types:
+  - chat
+  - queues
+duration_min: 55
+canvas: blank
+prompt_public: |
+  Спроектируйте групповой чат с большими комнатами, ролями, историей и упорядоченной доставкой.
+hidden:
+  functional:
+    - "Создавать группы и управлять ролями участников"
+    - "Отправлять сообщения и реакции"
+    - "Читать историю и mentions с cursor"
+    - "Доставлять сообщения online и offline участникам"
+    - "Удалять участника так, чтобы он не видел новые сообщения"
+  nonfunctional:
+    - "p99 send ack менее 200 мс"
+    - "Онлайн-доставка p95 менее 1 секунды"
+    - "До 100k участников в группе"
+    - "Порядок сообщений одинаков для всех участников"
+    - "Membership revoke действует за 5 секунд"
+  scale:
+    - "40 млн DAU"
+    - "Пик 400k сообщений/с"
+    - "99% групп меньше 100 участников"
+    - "Крупная live-группа даёт 10k сообщений/с"
+    - "Среднее сообщение 1.2 КБ"
+reveal_on_question:
+  - id: functional
+    keywords: ["group roles", "send reaction", "message history", "offline delivery", "remove member"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["send ack p99", "delivery p95", "same message order", "membership revoke", "sequencer failover"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["chat DAU", "messages per second", "group size", "hot room rate", "message size"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    Send API требует group_id, client_id и membership_version; history cursor основан на group_seq.
+    Membership API возвращает versioned changes; mentions доставляются отдельным индексом.
+    Модель данных.
+    Group metadata содержит shard, next_seq и membership_epoch.
+    Messages append-only по group_seq.
+    Membership хранит role, joined_seq, left_seq; пользователь читает только диапазон своего участия.
+    Основные потоки.
+    Sequencer shard присваивает group_seq и атомарно пишет message/outbox.
+    Малые группы получают fanout delivery per member, большие — один group topic и pull по cursor.
+    Reactions агрегируются отдельно.
+    Масштабирование.
+    Обычные группы шардируются по group_id.
+    Hot live group получает dedicated sequencer partition и replicas; readers забирают micro-batches.
+    Gateway subscriptions хранят group topic, не список миллионов message copies.
+    Согласованность.
+    Один leader/epoch сериализует сообщения группы; accepted после quorum append.
+    Membership revoke повышает epoch, публикует control event gateway и delivery router для закрытия активной subscription; delivery и history проверяют joined/left sequence и актуальный epoch.
+    Реакции eventually consistent.
+    Отказы и восстановление.
+    При failover новый sequencer fencing старый epoch и продолжает после committed seq.
+    Медленный участник не тормозит группу, а догоняет history.
+    Poison attachment заменяется moderation tombstone.
+    Наблюдаемость.
+    Метрики ack/delivery, sequence gaps, hot partition utilization, membership-check latency, fanout/pull split, lag клиентов и moderation recall.
+    Audit отслеживает role changes.
+    Практические решения.
+    Размер группы определяет стратегию, но переход проходит dual delivery с dedup.
+    Mentions индексируются после commit.
+    Encryption at rest и ACL обязательны; содержимое push минимально.
+  tradeoffs:
+    - "Fanout per member против shared topic"
+    - "Один leader на группу против разделения hot room: простой total order против более высокой пропускной способности и сложного merge"
+    - "Dedicated shard hot group против равномерного hash"
+    - "Синхронная membership проверка против кэша с epoch"
+    - "Реакции в message row против отдельного агрегата"
+  diagram: diagrams/group-chat.gold.drawio
+rubric_overrides:
+  - "Оценивается единый group_seq для всех читателей"
+  - "Нужна стратегия для 100k участников и hot room"
+  - "Удалённый участник не должен читать новые сообщения"
+  - "Кандидат должен описать sequencer failover с fencing"

@@ -1,0 +1,85 @@
+id: celebrity-feed
+title: Лента со знаменитостями
+difficulty: 4
+architecture_types:
+  - feed
+  - queues
+  - distributed_cache
+duration_min: 60
+canvas: sketch
+starter_diagram: diagrams/celebrity-feed.starter.drawio
+prompt_public: |
+  Перед вами чистый fan-out-on-write. Перепроектируйте ленту, чтобы публикация автора со 100 млн подписчиков не создавала шторм и при этом лента оставалась быстрой.
+hidden:
+  functional:
+    - "Смешивать посты обычных авторов и знаменитостей"
+    - "Показывать новый celebrity post за 10 секунд"
+    - "Поддерживать delete и moderation recall"
+    - "Стабильно пагинировать смешанную ленту"
+    - "Защищать систему от нескольких одновременных viral posts"
+  nonfunctional:
+    - "p99 чтения менее 250 мс"
+    - "Publish API p99 менее 150 мс независимо от followers"
+    - "Доступность чтения 99.99%"
+    - "Fanout backlog обычных авторов менее 30 секунд"
+    - "Удалённый пост исчезает за 20 секунд"
+  scale:
+    - "100 млн подписчиков у крупнейшего автора"
+    - "Celebrity публикует до 20 постов/час"
+    - "Пик ленты 800k QPS"
+    - "Обычный автор имеет медиану 300 подписчиков"
+    - "Один viral post даёт 5 млн чтений/с через CDN media"
+reveal_on_question:
+  - id: functional
+    keywords: ["celebrity posts", "push pull feed", "moderation recall", "mixed cursor", "viral posts"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["feed p99", "publish p99", "fanout backlog", "delete delay", "read availability"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["celebrity followers", "posts per hour", "feed QPS", "median followers", "viral reads"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    Publish API одной транзакцией фиксирует post и transactional outbox; relay доставляет PostCreated с дедупликацией.
+    Feed API получает materialized inbox и список celebrity subscriptions из follow graph, затем делает bounded k-way merge; cursor несёт позиции обоих источников и snapshot watermark.
+    Модель данных.
+    Author profile хранит fanout_mode с version и threshold.
+    Обычный inbox содержит post references; celebrity outbox — упорядоченные posts.
+    Tombstone store и moderation epoch проверяются после merge.
+    Основные потоки.
+    Router отправляет normal author в fanout queue, celebrity — только в outbox плюс cache warming.
+    Reader параллельно читает inbox и несколько celebrity outbox, merge по rank_time, фильтрует и batch-гидратирует.
+    Масштабирование.
+    Celebrity outbox реплицируется и кэширует последние страницы по author.
+    Подписки группируются, запросы coalesced.
+    Если пользователь подписан на тысячи celebrity, предварительный tiered aggregate строит candidate pool, ограничивая fan-in.
+    Согласованность.
+    Fanout mode меняется versioned и допускает период dual-read с dedup post_id.
+    Snapshot cursor не включает посты новее watermark во второй странице.
+    Delete tombstone сильнее stale inbox/outbox copy.
+    Отказы и восстановление.
+    При перегрузке celebrity source возвращает stale cached page с маркировкой, но обычная лента остаётся.
+    Fanout queue имеет per-author fairness.
+    Cache stampede сдерживают leases и jitter; rebuild читает author outbox.
+    Наблюдаемость.
+    Наблюдаются publish amplification, queue lag по author tier, merge fan-in/latency, dedup rate при mode transition, cache hit celebrity, tombstone staleness и dropped candidates.
+    Capacity alarm учитывает одновременные launches.
+    Практические решения.
+    Стартовая схема перестаёт копировать celebrity post каждому follower.
+    Threshold определяется не только followers, но и publish/read rates.
+    Регулярный тест переводит автора между режимами и проверяет отсутствие дублей.
+  tradeoffs:
+    - "Push против pull для celebrity: write storm против read fan-in"
+    - "Статический threshold против динамической классификации"
+    - "Merge на запросе против precomputed aggregate"
+    - "Stale celebrity cache против отказа всей ленты"
+    - "Dual-read миграция против мгновенного переключения"
+  diagram: diagrams/celebrity-feed.gold.drawio
+rubric_overrides:
+  - "Кандидат обязан устранить fanout 100 млн записей"
+  - "Оценивается bounded merge и сложный cursor"
+  - "Нужно безопасно менять fanout_mode без дублей"
+  - "Delete/moderation должны работать для обоих путей"
+  - "Следует обсудить cache stampede viral post"

@@ -1,0 +1,88 @@
+id: enterprise-chat
+title: Корпоративный мессенджер
+difficulty: 5
+architecture_types:
+  - chat
+  - search
+  - identity_auth
+  - object_storage
+duration_min: 60
+canvas: blank
+prompt_public: |
+  Спроектируйте корпоративный чат с tenant isolation, retention, legal hold, eDiscovery и внешними гостями.
+hidden:
+  functional:
+    - "Сообщения, каналы, threads и поиск"
+    - "Настраиваемая retention policy по workspace/channel"
+    - "Legal hold, запрещающий удаление выбранных данных"
+    - "eDiscovery export с audit trail"
+    - "Гости с ограниченным доступом и отзывом"
+  nonfunctional:
+    - "Доступность сообщений 99.99%"
+    - "p99 поиска менее 1 секунды"
+    - "Tenant data residency соблюдается без исключений"
+    - "Revocation гостя действует за 60 секунд"
+    - "Экспорт 10 млн сообщений завершается за 6 часов"
+  scale:
+    - "200k организаций и 25 млн DAU"
+    - "Пик 500k сообщений/с"
+    - "Крупный tenant хранит 5 млрд сообщений"
+    - "Поисковый индекс 5 ПБ"
+    - "До 100 параллельных legal exports"
+reveal_on_question:
+  - id: functional
+    keywords: ["channels threads", "retention policy", "legal hold", "eDiscovery export", "external guest"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["message availability", "search p99", "data residency", "guest revocation", "export deadline"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["enterprise organizations", "message rate", "largest tenant", "search index size", "parallel exports"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    Chat API работает в tenant home region; Search API применяет ACL filter; Compliance API создаёт case, hold и export jobs с dual approval.
+    Guest token ограничен tenant/channel и expiry.
+    Модель данных.
+    Message immutable, edit/delete представлены версиями и tombstone.
+    Retention policy version привязана к объекту; hold mapping с case_id переопределяет purge.
+    Audit ledger append-only и tamper-evident.
+    Основные потоки.
+    Message store фиксирует message и outbox row одной транзакцией; relay индексирует сообщения и доставляет события.
+    Search API получает разрешённые channel IDs и ACL epoch из identity/guest service и передаёт tenant-scoped prefilter в index.
+    Retention planner создаёт purge candidates, hold evaluator отбрасывает защищённые, deletion worker удаляет message versions, search documents, attachments и archive copies, затем пишет proof.
+    Export читает consistent case snapshot.
+    Масштабирование.
+    Tenant routing запрещает cross-residency storage.
+    Крупные tenants получают shards, search index делится tenant/time.
+    Export workers имеют квоты, чтобы compliance jobs не ухудшали chat; object archive использует immutable tier.
+    Согласованность.
+    Message commit строгий в home region; search eventual.
+    Hold creation получает effective watermark: после ack все подходящие purge jobs обязаны перепроверить hold epoch.
+    Export фиксирует manifest и checksums.
+    Отказы и восстановление.
+    При недоступном search чат работает, поиск показывает lag.
+    Purge retry идемпотентен; partial deletion остаётся в reconciliation queue.
+    Потеря home region следует tenant-specific DR, не копируя данные в запрещённую юрисдикцию.
+    Наблюдаемость.
+    Метрики индексирования, ACL filter rejects, retention backlog, hold race prevented, deletion completeness, export throughput, guest revocation и residency violations.
+    Audit ledger регулярно проверяет hash chain.
+    Практические решения.
+    Encryption keys scoped tenant/region, enterprise может использовать customer-managed key.
+    Legal hold доступен ограниченным ролям с dual control.
+    Restore backup также обязан применять актуальные tombstones и holds.
+  tradeoffs:
+    - "Общий multi-tenant shard против dedicated enterprise shard"
+    - "Search ACL prefilter против postfilter"
+    - "Hard delete против cryptographic erase"
+    - "Archive tier против скорости eDiscovery"
+    - "Cross-region DR против data residency"
+    - "Немедленный hold против производительности purge"
+  diagram: diagrams/enterprise-chat.gold.drawio
+rubric_overrides:
+  - "Главный фокус — гонка retention purge и legal hold"
+  - "Кандидат должен обеспечить data residency и tenant isolation"
+  - "Search обязан применять текущие ACL"
+  - "Экспорт требует snapshot, manifest и аудит"
+  - "Backup restore не должен воскресить удалённое"

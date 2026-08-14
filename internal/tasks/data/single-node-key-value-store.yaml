@@ -1,0 +1,53 @@
+id: single-node-key-value-store
+title: Key-value хранилище на одном узле
+difficulty: 1
+architecture_types:
+  - key_value_store
+duration_min: 25
+canvas: blank
+prompt_public: |
+  Спроектируйте дисковое key-value хранилище на одном сервере.
+  Согласуйте API и гарантии перед выбором структур данных.
+hidden:
+  functional:
+    - "Поддерживать Put, Get и Delete для произвольных byte-ключей и значений"
+    - "Переживать перезапуск без потери подтверждённых записей"
+    - "Поддерживать batch атомарных изменений"
+    - "Выполнять фоновую очистку удалённых и устаревших версий"
+  nonfunctional:
+    - "Подтверждённый Put не теряется после падения процесса или питания"
+    - "Get p99 < 10 мс, Put p99 < 20 мс на NVMe"
+    - "Контрольная сумма должна обнаруживать повреждённые записи"
+    - "Доступность одного процесса важнее онлайн-ремонта: короткий recovery допустим"
+  scale:
+    - "До 500 млн ключей"
+    - "2 ТБ полезных данных, среднее значение 2 КБ"
+    - "Пик 30 тыс. Get/с и 10 тыс. Put/с"
+    - "Рабочий набор индекса ограничен 32 ГБ RAM"
+reveal_on_question:
+  - id: functional
+    keywords: ["функционал", "api", "batch", "удален", "перезапуск", "очист"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["durability", "надёж", "latency", "задерж", "checksum", "восстанов"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["масштаб", "нагруз", "qps", "ключ", "терабайт", "ram", "сколько"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    API принимает byte key и value, а batch получает последовательность Put/Delete с одним commit. Для write-heavy профиля подходит LSM-архитектура. Запись сначала сериализуется в WAL с длиной, типом, sequence number и checksum; batch обрамляется общей записью commit. После fsync WAL изменения попадают в mutable memtable и клиент получает успех. Delete представлен tombstone. Когда memtable достигает лимита, она становится immutable, новая принимает трафик, а фоновый flush создаёт отсортированный SSTable и атомарно обновляет manifest.
+
+    Get ищет ключ по убыванию sequence: mutable и immutable memtables, затем SSTables от новых уровней к старым. Bloom filter пропускает файлы, где ключа точно нет, sparse index находит блок, block cache удерживает горячие распакованные данные. Блок имеет собственную checksum; повреждение возвращает явную ошибку, а не случайное значение. Внутри одного process read snapshot фиксирует sequence, поэтому параллельная compaction не меняет видимый результат. После безопасной установки manifest старые файлы удаляются только когда их не читает ни один snapshot.
+
+    Leveled compaction объединяет пересекающиеся диапазоны, удаляет затенённые версии и tombstones, когда нижние уровни больше не содержат старого значения. Она ограничивается по I/O, иначе p99 запросов пострадает; при накоплении L0 запись получает backpressure. Recovery читает manifest, подключает завершённые SSTables и переигрывает только WAL после последнего flush, игнорируя неполный хвост и batch без commit. Периодическая сверка checksums и резервная копия manifest с SSTables защищают от скрытого повреждения, хотя один узел не даёт высокой доступности. Метрики включают WAL fsync, latency, cache и Bloom hit, L0 files, compaction debt, write amplification, bytes и recovery duration. Алерты предупреждают о заполнении диска, stalled writes и checksum errors.
+  tradeoffs:
+    - "LSM-tree vs B-tree: LSM ускоряет последовательную запись, но платит compaction и read amplification."
+    - "fsync каждой записи vs group commit: первая минимизирует окно ожидания, group commit резко повышает throughput."
+    - "Leveled vs size-tiered compaction: leveled экономит чтения и место, tiered уменьшает write amplification."
+    - "Полный индекс в RAM vs sparse index: полный быстрее, sparse укладывается в заданные 32 ГБ."
+  diagram: diagrams/single-node-key-value-store.gold.drawio
+rubric_overrides:
+  - "Подтверждение записи возможно только после fsync WAL либо эквивалентной durable фиксации."
+  - "Нужно объяснить порядок поиска версии и безопасное удаление SSTable."
+  - "Batch должен отличать committed данные от неполного хвоста WAL."

@@ -1,0 +1,24 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон"><mxGraphModel dx="1300" dy="850" grid="1"><root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="clients" value="Offline CRDT Clients" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="20" y="190" width="150" height="70" as="geometry"/></mxCell>
+    <mxCell id="edge" value="Regional Gateway&#xa;ACL version + WebSocket" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1"><mxGeometry x="220" y="180" width="180" height="90" as="geometry"/></mxCell>
+    <mxCell id="router" value="Home Region Router&#xa;document_id + epoch" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="460" y="180" width="180" height="80" as="geometry"/></mxCell>
+    <mxCell id="writer" value="Fenced Sequencer&#xa;CRDT validation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" vertex="1" parent="1"><mxGeometry x="700" y="180" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="log" value="Multi-AZ Operation Log&#xa;causal frontier" style="shape=process;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="930" y="50" width="180" height="80" as="geometry"/></mxCell>
+    <mxCell id="fanout" value="Cross-region Fan-out Hubs" style="shape=process;whiteSpace=wrap;html=1;fillColor=#ffe6cc;" vertex="1" parent="1"><mxGeometry x="930" y="190" width="180" height="60" as="geometry"/></mxCell>
+    <mxCell id="snapshot" value="Snapshot + Tombstone GC" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="920" y="350" width="190" height="70" as="geometry"/></mxCell>
+    <mxCell id="object" value="Object Storage&#xa;versioned snapshots" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="680" y="350" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="acl" value="Strong ACL Store" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f8cecc;" vertex="1" parent="1"><mxGeometry x="230" y="360" width="160" height="70" as="geometry"/></mxCell>
+    <mxCell id="e1" value="op_id + causal context" edge="1" parent="1" source="clients" target="edge"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="ACL lookup / watch" edge="1" parent="1" source="edge" target="acl"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="route to owning region" edge="1" parent="1" source="edge" target="router"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" value="operation + epoch" edge="1" parent="1" source="router" target="writer"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e5" value="quorum append" edge="1" parent="1" source="writer" target="log"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e6" value="committed CRDT deltas" edge="1" parent="1" source="log" target="fanout"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e7" value="regional subscriptions" edge="1" parent="1" source="fanout" target="edge"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e8" value="stable operation ranges" edge="1" parent="1" source="log" target="snapshot"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e9" value="snapshot + frontier" edge="1" parent="1" source="snapshot" target="object"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e10" value="reconnect snapshot" edge="1" parent="1" source="object" target="edge"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root></mxGraphModel></diagram>
+</mxfile>

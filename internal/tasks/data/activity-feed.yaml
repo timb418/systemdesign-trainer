@@ -1,0 +1,82 @@
+id: activity-feed
+title: Лента действий команды
+difficulty: 2
+architecture_types:
+  - feed
+  - queues
+  - search
+duration_min: 40
+canvas: blank
+prompt_public: |
+  Спроектируйте ленту аудируемых действий в корпоративном продукте: изменения документов, комментарии и назначения.
+hidden:
+  functional:
+    - "Принимать события разных типов с actor и object"
+    - "Показывать ленту workspace и персональную ленту"
+    - "Фильтровать по типу, проекту и участнику"
+    - "Схлопывать повторяющиеся действия в понятную группу"
+    - "Сохранять ссылку на исходный объект и audit detail"
+  nonfunctional:
+    - "Событие появляется за 10 секунд"
+    - "p99 чтения менее 300 мс"
+    - "Audit события не теряются и неизменяемы"
+    - "Права доступа применяются на момент чтения"
+    - "Данные workspace изолированы и шифруются"
+  scale:
+    - "100k организаций и 8 млн MAU"
+    - "До 60k событий/с в пике"
+    - "Среднее событие 700 байт"
+    - "Лента хранится 2 года"
+    - "Один массовый импорт создаёт 2 млн событий"
+reveal_on_question:
+  - id: functional
+    keywords: ["workspace timeline", "персональная лента", "activity filters", "group repeated actions", "audit detail"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["feed freshness", "read p99", "immutable audit", "ACL at read", "workspace isolation"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["организации", "activity events в секунду", "event size", "retention ленты", "bulk import"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    Producers вызывают idempotent ingestion API или пишут OutboxEvent; Feed API читает workspace timeline с cursor и filters.
+    Detail endpoint возвращает payload только после текущей ACL-проверки.
+    Модель данных.
+    Canonical activity содержит event_id, tenant_id, actor, verb, object_ref, occurred_at, ingested_at и schema_version.
+    Immutable raw отделён от display group; group хранит count, actors summary и time range.
+    Основные потоки.
+    Outbox relay отправляет события в log, normalizer проверяет schema, enrichment добавляет display metadata, indexer пишет timeline store и search index.
+    Compactor схлопывает только presentation, не удаляя audit raw.
+    Масштабирование.
+    Tenant_id входит в partition key и все storage keys.
+    Огромный import получает отдельную очередь и rate; timeline buckets делятся по дню.
+    Search filters обслуживает inverted index, обычный cursor — timeline store.
+    Согласованность.
+    At-least-once устраняется event_id.
+    Порядок определяется occurred_at с tie-break event_id, но late events могут вставляться в прошлое; cursor snapshot watermark удерживает стабильную сессию.
+    ACL всегда свежая.
+    Отказы и восстановление.
+    Schema mismatch идёт в quarantine, не блокируя partition.
+    При падении index лента работает без сложных фильтров либо показывает задержку.
+    Rebuild index читает immutable raw; tenant delete запускает проверяемую purge workflow.
+    Наблюдаемость.
+    Контролируются outbox age, normalize errors по schema_version, end-to-end freshness, quarantine size, ACL denials, index lag и raw/index reconciliation.
+    Audit trail фиксирует административные replays.
+    Практические решения.
+    Grouping имеет явные правила по verb/object/window и не меняет юридический raw.
+    Enrichment хранит snapshot display name, но ссылка открывает актуальный объект.
+    Bulk import не должен вытеснять интерактивные события.
+  tradeoffs:
+    - "Outbox против dual write: надёжность против задержки"
+    - "Timeline store против search-only: предсказуемый cursor против гибких фильтров"
+    - "Схлопывание при записи против при чтении"
+    - "Snapshot имени против только актуальных данных"
+    - "Late insertion против стабильного cursor"
+  diagram: diagrams/activity-feed.gold.drawio
+rubric_overrides:
+  - "Оценивается immutable audit raw и восстанавливаемый index"
+  - "ACL должна проверяться при чтении, а не только ingestion"
+  - "Нужно изолировать массовый импорт"
+  - "Кандидат должен определить semantics grouping"

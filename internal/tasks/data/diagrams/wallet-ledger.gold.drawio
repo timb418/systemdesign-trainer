@@ -1,0 +1,25 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон"><mxGraphModel dx="1200" dy="800" grid="1"><root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="clients" value="Wallet Clients" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="20" y="190" width="130" height="60" as="geometry"/></mxCell>
+    <mxCell id="api" value="Transfer API&#xa;idempotency + auth" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1"><mxGeometry x="200" y="180" width="160" height="80" as="geometry"/></mxCell>
+    <mxCell id="router" value="Routing Directory +&#xa;Fenced 2PC Coordinator" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="410" y="175" width="190" height="90" as="geometry"/></mxCell>
+    <mxCell id="ledger" value="Ledger Participant Shards&#xa;Prepared Postings + Locks" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" vertex="1" parent="1"><mxGeometry x="660" y="170" width="190" height="100" as="geometry"/></mxCell>
+    <mxCell id="decision" value="Quorum Decision Log&#xa;COMMIT / ABORT" style="shape=process;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1"><mxGeometry x="430" y="50" width="170" height="70" as="geometry"/></mxCell>
+    <mxCell id="balance" value="Balance Projection&#xa;available/pending/settled" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="920" y="50" width="180" height="90" as="geometry"/></mxCell>
+    <mxCell id="outbox" value="Ledger Outbox / CDC" style="shape=process;whiteSpace=wrap;html=1;fillColor=#ffe6cc;" vertex="1" parent="1"><mxGeometry x="920" y="190" width="170" height="60" as="geometry"/></mxCell>
+    <mxCell id="provider" value="Bank / Payment Provider" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;" vertex="1" parent="1"><mxGeometry x="920" y="350" width="180" height="60" as="geometry"/></mxCell>
+    <mxCell id="reconcile" value="Reconciliation&#xa;Suspense Accounts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;" vertex="1" parent="1"><mxGeometry x="650" y="350" width="190" height="80" as="geometry"/></mxCell>
+    <mxCell id="e1" value="transfer + idempotency key" edge="1" parent="1" source="clients" target="api"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="route accounts deterministically" edge="1" parent="1" source="api" target="router"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="PREPARE / COMMIT(transaction_id)" edge="1" parent="1" source="router" target="ledger"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" value="transactional balance delta" edge="1" parent="1" source="ledger" target="balance"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e5" value="committed financial events" edge="1" parent="1" source="ledger" target="outbox"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e6" value="deposit / withdrawal command" edge="1" parent="1" source="outbox" target="provider"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e7" value="clearing records" edge="1" parent="1" source="provider" target="reconcile"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e8" value="breaks + reversal postings" edge="1" parent="1" source="reconcile" target="ledger"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e9" value="strong balance read" edge="1" parent="1" source="balance" target="api"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e10" value="durable decision + epoch" edge="1" parent="1" source="router" target="decision"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e11" value="recover prepared transaction" edge="1" parent="1" source="ledger" target="decision"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root></mxGraphModel></diagram>
+</mxfile>

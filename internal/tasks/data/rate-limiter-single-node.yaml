@@ -1,0 +1,79 @@
+id: rate-limiter-single-node
+title: Rate limiter для одного узла
+difficulty: 1
+architecture_types:
+  - rate_limiter
+duration_min: 25
+canvas: blank
+prompt_public: |
+  Спроектируйте ограничитель частоты запросов внутри одного API-процесса. Обсудите контракт, алгоритм и поведение при перегрузке.
+hidden:
+  functional:
+    - "Ограничивать запросы по API key и endpoint"
+    - "Возвращать HTTP 429 и Retry-After"
+    - "Поддерживать burst поверх устойчивой скорости"
+    - "Обновлять лимиты без рестарта процесса"
+    - "Не учитывать health checks и внутренний трафик"
+  nonfunctional:
+    - "Решение добавляет не более 0.5 мс p99"
+    - "Память ограничителя не превышает 512 МБ"
+    - "Ложный пропуск сверх лимита не более 2%"
+    - "При исчерпании памяти новые неизвестные ключи fail-closed только на платных endpoints"
+    - "Конфигурация применяется атомарно"
+  scale:
+    - "До 30k входящих RPS на узел"
+    - "До 1 млн активных ключей за 10 минут"
+    - "Типичный лимит 100 запросов/минуту и burst 20"
+    - "Запись состояния ключа около 64 байт"
+    - "Конфигурация меняется не чаще 10 раз в минуту"
+reveal_on_question:
+  - id: functional
+    keywords: ["API key и endpoint", "HTTP 429", "Retry-After", "burst", "горячее обновление лимита"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["overhead limiter", "лимит памяти", "ложный пропуск", "memory pressure", "атомарный config"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["RPS на узел", "активные ключи", "bucket rate", "размер состояния ключа", "частота config"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    Middleware вычисляет key из tenant/api_key/route и возвращает allow, remaining, reset_at.
+    Ответ 429 содержит Retry-After и request_id; административный watcher получает versioned rules, не блокируя request path.
+    Модель данных.
+    Для ключа хранится token count и last_refill_monotonic; правила неизменяемы и переключаются atomic pointer.
+    Idle entries имеют last_seen для eviction, а служебные маршруты заранее классифицируются отдельно.
+    Основные потоки.
+    Token bucket лениво пополняется при запросе, затем атомарно списывает токен.
+    Sharded map уменьшает lock contention.
+    Очиститель удаляет idle keys пакетами; конфиг сначала валидируется и целиком публикуется новой версией.
+    Масштабирование.
+    Шарды выбираются hash ключа; число lock shards больше числа CPU.
+    Память ограничивается admission и approximate LRU.
+    Горячий единственный ключ получает отдельный cache-line-friendly counter, чтобы не блокировать соседние ключи.
+    Согласованность.
+    На одном процессе решение строго для последовательности под его lock, но несколько процессов не делят бюджет — это явно вне v1.
+    Monotonic clock исключает скачки NTP; смена правила задаёт, сохранять ли накопленные tokens.
+    Отказы и восстановление.
+    Паника или ошибка watcher не меняет последнюю валидную конфигурацию.
+    При pressure сначала удаляются давно неактивные free-tier ключи.
+    Защита от cardinality attack нормализует ключи и не создаёт state для заведомо запрещённых запросов.
+    Наблюдаемость.
+    Снимаются allow/deny по rule_id без полного api_key label, latency middleware, lock contention, число entries, eviction и config version.
+    Алерт сообщает saturation памяти и необычный рост новых ключей.
+    Практические решения.
+    Token bucket выбран из-за управляемого burst; fixed window дал бы двойной всплеск на границе.
+    Настройка лимита включает rate и capacity.
+    Нагрузочный тест проверяет точность с monotonic fake clock и гонки под race detector.
+  tradeoffs:
+    - "Token bucket против sliding window: дешёвое состояние против более ровной справедливости"
+    - "Один lock против sharded locks: простота против contention"
+    - "Точный LRU против sampled eviction: предсказуемость против накладных расходов"
+    - "Fail-open против fail-closed при memory pressure"
+  diagram: diagrams/rate-limiter-single-node.gold.drawio
+rubric_overrides:
+  - "Оценивается корректная арифметика token bucket и Retry-After"
+  - "Кандидат должен учитывать cardinality attack"
+  - "Нужен bounded memory, а не бесконечная map"
+  - "Важно честно обозначить границу single-node решения"

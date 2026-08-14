@@ -1,0 +1,10 @@
+<mxfile host="app.diagrams.net"><diagram id="short-starter" name="Старт"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="app" value="Mobile App" vertex="1" parent="1"><mxGeometry x="20" y="80" width="100" height="50" as="geometry"/></mxCell>
+<mxCell id="upload" value="Upload Service" vertex="1" parent="1"><mxGeometry x="170" y="30" width="120" height="50" as="geometry"/></mxCell>
+<mxCell id="feed" value="Feed API" vertex="1" parent="1"><mxGeometry x="170" y="140" width="110" height="50" as="geometry"/></mxCell>
+<mxCell id="db" value="Одна metadata DB" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="350" y="80" width="140" height="60" as="geometry"/></mxCell>
+<mxCell id="e1" value="загрузить ролик" edge="1" parent="1" source="app" target="upload"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e2" value="читать ленту" edge="1" parent="1" source="app" target="feed"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e3" value="метаданные" edge="1" parent="1" source="feed" target="db"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram></mxfile>

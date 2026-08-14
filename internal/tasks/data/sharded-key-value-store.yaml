@@ -1,0 +1,55 @@
+id: sharded-key-value-store
+title: Шардированное key-value хранилище
+difficulty: 3
+architecture_types:
+  - key_value_store
+duration_min: 45
+canvas: blank
+prompt_public: |
+  Спроектируйте горизонтально масштабируемое key-value хранилище внутри одного региона.
+  Уточните гарантии и сценарии изменения состава кластера.
+hidden:
+  functional:
+    - "Поддерживать Get, Put, Delete и Compare-And-Set для одного ключа"
+    - "Автоматически разбивать keyspace и переносить диапазоны между узлами"
+    - "Реплицировать каждый шард и выполнять автоматический failover"
+    - "Предоставлять консистентное чтение по запросу клиента"
+  nonfunctional:
+    - "Подтверждённая запись не теряется при отказе одного узла"
+    - "Доступность 99.99% при потере отдельного узла или стойки"
+    - "Get p99 < 15 мс, Put p99 < 30 мс внутри региона"
+    - "Перемещение шарда не должно останавливать операции дольше 2 секунд"
+  scale:
+    - "10 ПБ данных и 5 трлн ключей"
+    - "Пик 3 млн Get/с и 800 тыс. Put/с"
+    - "3000 storage-узлов в 6 тыс. шардов"
+    - "Среднее значение 1.5 КБ, крупнейшее ограничено 1 МБ"
+reveal_on_question:
+  - id: functional
+    keywords: ["функционал", "api", "cas", "шард", "перенос", "реплик", "чтение"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["durability", "надёж", "latency", "доступн", "failover", "простой", "sla"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["масштаб", "нагруз", "qps", "петабайт", "узл", "ключ", "сколько"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Keyspace делится на тысячи логических hash-диапазонов, которых заметно больше, чем узлов. Metadata service на основе consensus хранит карту range→replica set, epoch и состояние миграции; клиенты кешируют карту и при stale epoch получают redirect. Каждый шард — отдельная Raft-группа из трёх реплик, размещённых по стойкам. Leader сериализует Put, Delete и Compare-And-Set в журнале, подтверждает после quorum fsync и применяет запись к локальному LSM. Linearizable Get использует ReadIndex или lease с проверкой срока, а более дешёвое stale чтение разрешено с follower.
+
+    Запрос несёт idempotency token, чтобы retry после timeout не создал иной результат CAS. Значение ограничивается до одного мегабайта, а большие payload должны жить в object storage. LSM использует WAL, memtable, SSTables, Bloom filters и compaction; compaction I/O ограничивается отдельно от Raft snapshot. Backpressure начинается на конкретном шарде, не на всём узле. Горячий ключ остаётся ограничением одного leader, поэтому сервис обнаруживает skew, может переносить его шард на свободные узлы, но не обещает линейно масштабировать единственный ключ.
+
+    Для split metadata выбирает границу, replica set создаёт snapshot двух новых диапазонов и догоняет хвост журнала. После quorum готовности атомарно публикуется новая epoch; старый шард коротко проксирует операции. Перенос replica сначала добавляет learner, передаёт snapshot с rate limit, догоняет log, затем меняет membership joint consensus и удаляет старую копию. При падении leader Raft выбирает новый; потеря кворума жертвует доступностью ради подтверждённых данных. Наблюдаемость содержит QPS и p99 по shard, Raft commit/apply lag, election count, compaction debt, disk fullness, redirects, migration bytes и hot-key estimates. Алерты покрывают потерю quorum, долгую миграцию, частые election и дисковый запас; трасса включает metadata epoch и leader term.
+  tradeoffs:
+    - "Hash ranges vs ordered ranges: hash равномернее, ordered поддерживает сканы, но подвержен горячим префиксам."
+    - "Raft на шард vs общий журнал узла: отдельные группы изолируют сбои, но создают больше служебного трафика."
+    - "Linearizable vs follower reads: leader гарантирует свежесть, follower уменьшает задержку и нагрузку."
+    - "Проксирование stale route vs redirect: proxy прозрачен, redirect экономит серверный hop после обновления карты."
+    - "Мелкие vs крупные шарды: мелкие легче балансировать, но дороже по metadata и Raft."
+  diagram: diagrams/sharded-key-value-store.gold.drawio
+rubric_overrides:
+  - "Карта шардов должна иметь epoch и отдельный strongly consistent metadata plane."
+  - "Нужен quorum durability, а не только primary с асинхронной репликой."
+  - "Миграция обязана включать snapshot, catch-up и атомарное переключение маршрута."
+  - "Следует признать ограничение hot key даже при достаточной суммарной ёмкости."

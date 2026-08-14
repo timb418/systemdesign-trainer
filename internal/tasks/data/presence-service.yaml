@@ -1,0 +1,82 @@
+id: presence-service
+title: Сервис присутствия пользователей
+difficulty: 2
+architecture_types:
+  - chat
+  - distributed_cache
+duration_min: 35
+canvas: blank
+prompt_public: |
+  Спроектируйте presence service для мессенджера: online/offline, last seen и индикатор набора текста для контактов.
+hidden:
+  functional:
+    - "Регистрировать presence по нескольким устройствам"
+    - "Показывать online и last seen контактам"
+    - "Передавать typing с автоматическим expiry"
+    - "Учитывать privacy-настройки и блокировки"
+    - "Восстанавливать состояние после reconnect"
+  nonfunctional:
+    - "Изменение online видно за 3 секунды"
+    - "Lookup p99 менее 50 мс"
+    - "Доступность чтения 99.99%"
+    - "Ложный online после аварии живёт не более 45 секунд"
+    - "Typing может теряться, но не сохраняется"
+  scale:
+    - "100 млн зарегистрированных, 12 млн concurrent users"
+    - "До 25 млн WebSocket connections"
+    - "Heartbeat каждые 20 секунд"
+    - "Сырые heartbeats достигают 1.25 млн/с; gateway coalescing ограничивает записи в presence store пиком 500k updates/с"
+    - "Средний пользователь наблюдает 150 контактов"
+reveal_on_question:
+  - id: functional
+    keywords: ["multi-device presence", "online last seen", "typing expiry", "presence privacy", "reconnect state"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["online propagation", "lookup p99", "false online timeout", "read availability", "typing loss"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["concurrent users", "WebSocket connections", "heartbeat interval", "raw heartbeat rate", "contacts observed"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    Gateway отправляет session up/down/heartbeat с connection epoch.
+    Presence API поддерживает batch lookup контактов и subscription updates; typing — отдельный ephemeral channel с conversation scope.
+    Модель данных.
+    Device session содержит user, device, gateway, epoch и lease_expiry.
+    User presence агрегирует active session count и last_seen.
+    Privacy policy version кэшируется, typing key живёт пять секунд.
+    Основные потоки.
+    Heartbeats продлевают lease локально и пакетно обновляют distributed presence store.
+    Aggregator публикует только переходы offline↔online.
+    Subscription service fanout-ит изменения только авторизованным наблюдателям.
+    Масштабирование.
+    Пользователи шардируются по user_id; gateway агрегирует heartbeat, чтобы не писать каждый пакет.
+    Celebrity presence не fanout-ится миллионам followers: clients запрашивают batch при открытии поверхности.
+    Согласованность.
+    Lease и epoch не дают старому gateway воскресить session.
+    User online, пока активна хотя бы одна device lease.
+    Last_seen обновляется монотонно при последнем disconnect, но может отставать на lease timeout.
+    Отказы и восстановление.
+    Падение gateway естественно истекает leases.
+    Store outage удерживает локальные sessions и публикует snapshot после восстановления.
+    Subscription lag ведёт к batch refresh; privacy deny всегда проверяется перед ответом.
+    Наблюдаемость.
+    Измеряются active leases, heartbeat coalescing, expiry lag, false-online probes, subscription fanout, privacy denies, reconnect churn и store saturation.
+    Typing имеет отдельные дешёвые метрики без user labels.
+    Практические решения.
+    Presence — soft state, поэтому журналировать каждый heartbeat не нужно.
+    Durable last_seen записывается асинхронно.
+    Клиент получает expires_at и сам гасит stale typing/online indicator.
+  tradeoffs:
+    - "Heartbeat interval против скорости обнаружения отказа"
+    - "Push subscriptions против batch pull"
+    - "Точный last_seen против write amplification"
+    - "Fanout celebrity presence против on-demand lookup"
+    - "Общий канал presence/typing против разной надёжности"
+  diagram: diagrams/presence-service.gold.drawio
+rubric_overrides:
+  - "Кандидат должен моделировать multi-device aggregation"
+  - "Оцениваются leases и fencing epoch"
+  - "Privacy проверяется до раскрытия presence"
+  - "Typing нельзя проектировать как durable message"

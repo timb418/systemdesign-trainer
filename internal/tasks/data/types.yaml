@@ -27,3 +27,15 @@ types:
     name: Сбор метрик / аналитика событий
   - id: crawler
     name: Краулер / пайплайн данных
+  - id: distributed_cache
+    name: Распределённый кэш / CDN
+  - id: key_value_store
+    name: Key-value хранилище / распределённая БД
+  - id: booking_inventory
+    name: Бронирование / ограниченный инвентарь
+  - id: ecommerce
+    name: E-commerce / заказы и склад
+  - id: identity_auth
+    name: Identity / аутентификация и авторизация
+  - id: api_gateway
+    name: API Gateway / маршрутизация

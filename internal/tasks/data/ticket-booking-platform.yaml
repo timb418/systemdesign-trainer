@@ -1,0 +1,61 @@
+id: ticket-booking-platform
+title: Платформа продажи билетов
+difficulty: 4
+architecture_types:
+  - booking_inventory
+duration_min: 60
+canvas: blank
+prompt_public: |
+  Завершите архитектуру продажи мест на концерты с резкими стартами продаж.
+  Сначала определите гарантии выбора места и допуска пользователей.
+hidden:
+  functional:
+    - "Показывать схему зала и актуальный статус конкретных мест"
+    - "Ставить выбранные места в hold на 7 минут"
+    - "Подтверждать заказ после оплаты без двойной продажи места"
+    - "Поддерживать виртуальную очередь и лимиты на пользователя"
+    - "Освобождать hold после timeout, отказа оплаты или отмены"
+  nonfunctional:
+    - "Ни одно место не может иметь две подтверждённые продажи"
+    - "CreateHold p99 < 800 мс для допущенных пользователей"
+    - "Платформа переживает отказ зоны без потери подтверждённых заказов"
+    - "Позиция виртуальной очереди справедлива и не откатывается при reconnect"
+  scale:
+    - "10 млн пользователей приходят за первые 5 минут"
+    - "Один популярный концерт имеет 80 тыс. мест"
+    - "После admission глобальный пик 50 тыс. попыток hold/с и 10 тыс. оплат/с; один горячий event ограничен 5 тыс. hold/с"
+    - "Каталог содержит 200 тыс. событий, 2 млрд мест суммарно"
+    - "Менее 1% допущенных запросов должны достигать уже занятого места из-за stale UI"
+reveal_on_question:
+  - id: functional
+    keywords: ["функционал", "требован", "мест", "hold", "оплат", "очеред", "лимит", "отмен"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["двойн", "latency", "задерж", "справедлив", "зон", "надёж", "sla"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["масштаб", "нагруз", "qps", "пользовател", "концерт", "мест", "сколько", "пик"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    CDN отдаёт статическую схему зала и каталог, а Waiting Room принимает всплеск до основного API. При входе он выдаёт подписанный queue token с event_id, user_id и монотонным порядком. Admission controller выпускает ограниченное число токенов с коротким сроком, исходя из latency inventory и payment; reconnect с исходным token сохраняет позицию. Gateway проверяет подпись, срок, лимит аккаунта и rate limit, поэтому боты не обходят очередь простым масштабированием соединений.
+
+    Авторитетный inventory шардируется по event_id, чтобы транзакция нескольких мест одного концерта оставалась локальной. CreateHold содержит idempotency key и отсортированный набор seat_id. В serializable транзакции условные строки AVAILABLE→HELD получают hold_id и expires_at; если хотя бы одно место недоступно, весь набор откатывается. Событие commit через outbox обновляет поток seat changes. WebSocket fanout и коротко живущая snapshot-проекция обновляют UI; клиент считает её подсказкой, а не гарантией.
+
+    Checkout создаёт payment intent, не удерживая блокировки БД. Payment webhook и клиентский retry вызывают один идемпотентный Confirm: условный переход активного hold HELD→SOLD и создание order выполняются в транзакции. Saga затем выпускает билет; если платёж успешен, но hold уже истёк, политика делает автоматический refund. Delayed queue планирует expiry, а периодический sweeper на primary освобождает пропущенные hold; CAS не позволяет expiry победить уже подтверждённую продажу. Каждый inventory shard реплицируется consensus-группой минимум в трёх зонах и подтверждает запись после quorum fsync. Новый leader получает больший term/epoch; старый primary без quorum теряет lease и не может подтвердить продажу, поэтому отказ одной зоны не создаёт двух писателей и не теряет подтверждённый заказ.
+
+    Горячий event нельзя равномерно распределить по event_id без потери локальной атомарности, поэтому admission ограничивает write concurrency, а места можно заранее делить на секции с координатором для multi-section заказа. Метрики включают queue wait и fairness, admitted rate, hold conflict, DB lock time, expiry lag, payment/confirm mismatch, stale UI и invariant duplicate sold. Алерты немедленно реагируют на нарушение инварианта, split-brain epoch, backlog webhook и рост 429; аудит связывает queue token, hold, payment и order.
+  tradeoffs:
+    - "Шард по event vs seat: event сохраняет локальные транзакции, но создаёт горячий шард."
+    - "Pessimistic locks vs conditional updates: locks удобны для набора мест, CAS короче удерживает ресурсы."
+    - "WebSocket push vs polling: push снижает stale UI, но требует большой fanout инфраструктуры."
+    - "Жёсткий FIFO vs случайная лотерея: FIFO понятнее, лотерея устойчивее к миллисекундным преимуществам ботов."
+    - "Hold до оплаты vs optimistic checkout: hold исключает продажу из-под пользователя, но снижает утилизацию."
+    - "Синхронная межзональная репликация vs async: sync защищает инвариант при failover ценой latency."
+  diagram: diagrams/ticket-booking-platform.gold.drawio
+rubric_overrides:
+  - "Виртуальная очередь должна ограничивать admission до inventory, а не быть декоративной страницей."
+  - "Обязателен атомарный all-or-nothing hold набора конкретных мест."
+  - "Confirm, expiry и payment retry должны сходиться через идемпотентные CAS-переходы."
+  - "Нужно объяснить fencing старого primary после межзонального failover."
+  - "Кандидат должен признать hot-event shard и предложить управляемое ограничение."

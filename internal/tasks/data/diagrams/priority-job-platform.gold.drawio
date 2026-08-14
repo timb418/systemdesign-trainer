@@ -1,0 +1,22 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон"><mxGraphModel dx="1200" dy="800" grid="1"><root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="clients" value="Tenant producers" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="20" y="190" width="140" height="60" as="geometry"/></mxCell>
+    <mxCell id="api" value="Job API&#xa;auth + publish quota" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1"><mxGeometry x="200" y="180" width="160" height="80" as="geometry"/></mxCell>
+    <mxCell id="control" value="Control Plane&#xa;weights + quotas" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="430" y="30" width="160" height="80" as="geometry"/></mxCell>
+    <mxCell id="lanes" value="Priority Lanes&#xa;durable RF=3" style="shape=process;whiteSpace=wrap;html=1;fillColor=#ffe6cc;" vertex="1" parent="1"><mxGeometry x="430" y="180" width="160" height="80" as="geometry"/></mxCell>
+    <mxCell id="scheduler" value="Fair Scheduler&#xa;DRR + aging + EDF" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" vertex="1" parent="1"><mxGeometry x="650" y="180" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="lease" value="Lease State&#xa;fencing tokens" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="660" y="340" width="150" height="80" as="geometry"/></mxCell>
+    <mxCell id="workers" value="Worker fleets" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="900" y="190" width="150" height="60" as="geometry"/></mxCell>
+    <mxCell id="dlq" value="Retry + DLQ" style="shape=process;whiteSpace=wrap;html=1;fillColor=#f8cecc;" vertex="1" parent="1"><mxGeometry x="900" y="350" width="140" height="60" as="geometry"/></mxCell>
+    <mxCell id="e1" value="job(priority, deadline)" edge="1" parent="1" source="clients" target="api"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="partitioned append" edge="1" parent="1" source="api" target="lanes"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="config watch" edge="1" parent="1" source="control" target="scheduler"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" value="eligible lane heads" edge="1" parent="1" source="lanes" target="scheduler"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e5" value="pull(capacity, types)" edge="1" parent="1" source="workers" target="scheduler"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e6" value="leased job + token" edge="1" parent="1" source="scheduler" target="workers"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e7" value="lease / heartbeat state" edge="1" parent="1" source="scheduler" target="lease"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e8" value="ACK(token)" edge="1" parent="1" source="workers" target="lease"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e9" value="retry exhausted" edge="1" parent="1" source="workers" target="dlq"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root></mxGraphModel></diagram>
+</mxfile>

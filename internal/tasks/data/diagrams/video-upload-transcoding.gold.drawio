@@ -1,0 +1,23 @@
+<mxfile host="app.diagrams.net"><diagram id="upload-video" name="Эталон"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="client" value="Uploader Client" vertex="1" parent="1"><mxGeometry x="20" y="70" width="110" height="50" as="geometry"/></mxCell>
+<mxCell id="api" value="Upload Control API" vertex="1" parent="1"><mxGeometry x="170" y="30" width="140" height="50" as="geometry"/></mxCell>
+<mxCell id="obj" value="Source Object Store" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="170" y="130" width="140" height="60" as="geometry"/></mxCell>
+<mxCell id="flow" value="Workflow Queue" style="shape=process" vertex="1" parent="1"><mxGeometry x="360" y="30" width="130" height="60" as="geometry"/></mxCell>
+<mxCell id="scan" value="Probe and Moderation" vertex="1" parent="1"><mxGeometry x="540" y="30" width="150" height="50" as="geometry"/></mxCell>
+<mxCell id="trans" value="Transcode Workers" vertex="1" parent="1"><mxGeometry x="540" y="140" width="140" height="50" as="geometry"/></mxCell>
+<mxCell id="media" value="Versioned Media Store" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="740" y="100" width="150" height="60" as="geometry"/></mxCell>
+<mxCell id="pub" value="Manifest Publisher" vertex="1" parent="1"><mxGeometry x="940" y="100" width="140" height="50" as="geometry"/></mxCell>
+<mxCell id="meta" value="Video Metadata + Outbox&#xa;state / active_manifest" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="350" y="210" width="180" height="70" as="geometry"/></mxCell>
+<mxCell id="e1" value="create session" edge="1" parent="1" source="client" target="api"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e2" value="multipart signed upload" edge="1" parent="1" source="client" target="obj"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e3" value="CAS uploaded + outbox" edge="1" parent="1" source="api" target="meta"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e4" value="validation job" edge="1" parent="1" source="flow" target="scan"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e5" value="approved profiles" edge="1" parent="1" source="scan" target="trans"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e6" value="read immutable source" edge="1" parent="1" source="obj" target="trans"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e7" value="write temp artifacts" edge="1" parent="1" source="trans" target="media"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e8" value="verified artifacts" edge="1" parent="1" source="media" target="pub"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e9" value="outbox workflow" edge="1" parent="1" source="meta" target="flow"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e10" value="write versioned manifest" edge="1" parent="1" source="pub" target="media"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e11" value="CAS ready + active manifest" edge="1" parent="1" source="pub" target="meta"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram></mxfile>

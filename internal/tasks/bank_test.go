@@ -16,8 +16,11 @@ func TestLoadEmbeddedBank(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(bank.Types()) != 14 {
-		t.Fatalf("types: got %d want 14", len(bank.Types()))
+	if len(bank.Types()) != 20 {
+		t.Fatalf("types: got %d want 20", len(bank.Types()))
+	}
+	if len(bank.All()) != 75 {
+		t.Fatalf("tasks: got %d want 75", len(bank.All()))
 	}
 	task, ok := bank.Get("url-shortener-v1")
 	if !ok {
@@ -38,5 +41,61 @@ func TestLoadEmbeddedBank(t *testing.T) {
 	}
 	if _, err := bank.ReadDiagram(task.PreferredSolution.Diagram); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestEmbeddedBankCoverage(t *testing.T) {
+	fsys, err := tasks.Embedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bank, err := tasks.Load(fsys)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantDifficulty := map[int]int{1: 10, 2: 18, 3: 24, 4: 16, 5: 7}
+	gotDifficulty := map[int]int{}
+	usedTypes := map[string]int{}
+	sketches := 0
+	ids := map[string]struct{}{}
+	for _, task := range bank.All() {
+		if _, ok := ids[task.ID]; ok {
+			t.Errorf("duplicate task id %q", task.ID)
+		}
+		ids[task.ID] = struct{}{}
+		gotDifficulty[task.Difficulty]++
+		for _, typeID := range task.ArchitectureTypes {
+			usedTypes[typeID]++
+		}
+		if task.Canvas == "sketch" {
+			sketches++
+		}
+		for _, section := range [][]string{
+			task.Hidden.Functional,
+			task.Hidden.Nonfunctional,
+			task.Hidden.Scale,
+			task.PreferredSolution.Tradeoffs,
+			task.RubricOverrides,
+		} {
+			for _, item := range section {
+				if strings.TrimSpace(item) == "" {
+					t.Errorf("%s contains an empty content item", task.ID)
+				}
+			}
+		}
+	}
+	for difficulty, want := range wantDifficulty {
+		if got := gotDifficulty[difficulty]; got != want {
+			t.Errorf("difficulty %d: got %d want %d", difficulty, got, want)
+		}
+	}
+	if sketches != 10 {
+		t.Errorf("sketch tasks: got %d want 10", sketches)
+	}
+	for _, archType := range bank.Types() {
+		if usedTypes[archType.ID] == 0 {
+			t.Errorf("architecture type %q has no tasks", archType.ID)
+		}
 	}
 }

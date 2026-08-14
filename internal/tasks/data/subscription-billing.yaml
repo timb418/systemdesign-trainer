@@ -1,0 +1,60 @@
+id: subscription-billing
+title: Биллинг подписок
+difficulty: 3
+architecture_types:
+  - payments
+  - queues
+duration_min: 55
+canvas: blank
+prompt_public: |
+  Спроектируйте биллинг SaaS-подписок с ежемесячным списанием.
+  Пользователи меняют тарифы, платежи иногда отклоняются. Уточните продуктовые правила и архитектуру.
+hidden:
+  functional:
+    - "Создание подписки, смена тарифа, пауза и отмена"
+    - "Формирование invoice с prorating при смене тарифа"
+    - "Периодическое списание и retry по dunning-политике"
+    - "Webhook о результате оплаты и выдача entitlement"
+    - "Credit note, refund и ручная корректировка с аудитом"
+  nonfunctional:
+    - "Один billing period порождает не более одного логического invoice"
+    - "Денежные суммы считаются целыми minor units с правилами округления по валюте"
+    - "Изменения тарифа линеаризуемы относительно закрытия периода"
+    - "Доступность API 99.95%; задержка планового списания допускается до 5 минут"
+    - "Аудит финансовых документов хранится неизменяемо 7 лет"
+  scale:
+    - "30 млн активных подписок"
+    - "Пик 500k renewals/мин в полночь первого числа"
+    - "2k изменений подписки/с и 20k provider webhooks/с"
+    - "120 тарифов, 35 валют и 40 налоговых юрисдикций"
+    - "До 8 попыток оплаты за 21 день dunning"
+reveal_on_question:
+  - id: functional
+    keywords: ["тариф", "отмен", "пауза", "invoice", "prorat", "retry", "webhook", "refund", "коррект"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["дубликат", "округл", "валют", "консист", "линеар", "доступн", "задержк", "аудит"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["подпис", "пик", "renew", "qps", "тариф", "валют", "юрисдик", "попыт", "масштаб"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Subscription API управляет state machine и хранит Subscription(subscription_id, plan_version, period_start, period_end, status, version). Тарифы версионируются: invoice всегда ссылается на неизменяемые цены, налоговые правила и валюту. Команда change-plan записывает effective_at и политику prorating. На границе периода scheduler не сканирует все строки одновременно: подписки распределены по time buckets и hash-shard, а lease с fencing даёт shard одному worker. Уникальный индекс (subscription_id, period_start, invoice_type) исключает второй логический invoice.
+
+    Invoice service строит line items в целых minor units, отдельно хранит rounding adjustment и immutable Invoice. Создание документа, запись billing event и outbox выполняются транзакционно. Payment worker вызывает провайдера со стабильным idempotency key invoice_id:attempt_no; attempt_no увеличивается только после definitive failure, никогда после UNKNOWN. Webhook проверяется по подписи, сохраняется в inbox с уникальным provider_event_id и переводит PaymentAttempt условным CAS. Timeout остаётся UNKNOWN до poll/reconciliation. Успех в той же транзакции перехода пишет EntitlementCommand с ключом subscription_id+period_end+policy_version. Entitlement Service дедуплицирует этот ключ и монотонно продлевает access_until; повтор или старое событие не сокращает доступ. Временная ошибка планирует dunning retry с jitter, окончательная переводит подписку в grace/past_due по продуктовой политике. Cancel-at-period-end не отзывает оплаченный срок, немедленная отмена, refund или chargeback создают отдельную versioned revoke/adjust command по явной продуктовой политике.
+
+    Plan change, renewal и cancel сериализуются optimistic lock-ом подписки; событие, захватившее старую version, пересчитывается. Credit note и refund добавляют документы, а не редактируют закрытый invoice. Шардинг по subscription_id совмещает состояние и invoice, RF=3 защищает зону; отчётность читает CDC в warehouse. Пик первого числа сглаживается детерминированным распределением run_at в разрешённом пятиминутном окне и квотами провайдера. Метрики: renewal lag, duplicate conflict, invoice totals, rounding adjustments, payment success по attempt, webhook age, unknown outcomes, dunning recovery и entitlement lag. Audit trace связывает subscription version, invoice, попытку и provider reference.
+  tradeoffs:
+    - "Фиксированная полночь соответствует ожиданию, но создаёт пик; controlled jitter использует допустимое окно."
+    - "Immutable invoice усложняет исправления через credit note, зато сохраняет финансовый аудит."
+    - "Optimistic locking масштабируется лучше глобальной блокировки, но требует повторного расчёта гонок."
+    - "Webhook даёт быстрый результат, polling нужен для потерянных webhook и reconciliation."
+    - "Собственный scheduler контролируем, managed scheduler снижает эксплуатацию ценой vendor limits."
+  diagram: diagrams/subscription-billing.gold.drawio
+rubric_overrides:
+  - "Кандидат использует уникальность invoice на subscription period."
+  - "Proration и rounding имеют версионированные, воспроизводимые правила."
+  - "Webhook идемпотентен, проверяется по подписи и дополняется reconciliation."
+  - "Пиковые renewals распределяются без нарушения продуктового SLA."
+  - "Entitlement выдаётся и отзывается идемпотентными versioned-командами из подтверждённого payment state."

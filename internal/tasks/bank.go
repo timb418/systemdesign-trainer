@@ -90,19 +90,39 @@ func validateTask(t Task, types map[string]struct{}, fsys fs.FS) error {
 	if t.Difficulty < 1 || t.Difficulty > 5 {
 		return fmt.Errorf("difficulty должен быть 1–5")
 	}
+	if t.DurationMin < 20 || t.DurationMin > 90 {
+		return fmt.Errorf("duration_min должен быть 20–90")
+	}
 	if t.Canvas != "blank" && t.Canvas != "sketch" {
 		return fmt.Errorf("canvas: blank или sketch")
 	}
-	if t.PromptPublic == "" {
+	if strings.TrimSpace(t.PromptPublic) == "" {
 		return fmt.Errorf("пустой prompt_public")
 	}
 	if len(t.ArchitectureTypes) == 0 {
 		return fmt.Errorf("нужен хотя бы один architecture_types")
 	}
+	seenArchitectureType := map[string]struct{}{}
 	for _, id := range t.ArchitectureTypes {
 		if _, ok := types[id]; !ok {
 			return fmt.Errorf("неизвестный тип %s", id)
 		}
+		if _, ok := seenArchitectureType[id]; ok {
+			return fmt.Errorf("дубль architecture_types %s", id)
+		}
+		seenArchitectureType[id] = struct{}{}
+	}
+	if len(t.Hidden.Functional) < 4 {
+		return fmt.Errorf("hidden.functional: нужно хотя бы 4 требования")
+	}
+	if len(t.Hidden.Nonfunctional) < 4 {
+		return fmt.Errorf("hidden.nonfunctional: нужно хотя бы 4 требования")
+	}
+	if len(t.Hidden.Scale) < 4 {
+		return fmt.Errorf("hidden.scale: нужно хотя бы 4 факта")
+	}
+	if err := validateRevealRules(t.RevealOnQuestion); err != nil {
+		return err
 	}
 	if t.Canvas == "sketch" {
 		if t.StarterDiagram == "" {
@@ -111,10 +131,67 @@ func validateTask(t Task, types map[string]struct{}, fsys fs.FS) error {
 		if _, err := fs.ReadFile(fsys, t.StarterDiagram); err != nil {
 			return fmt.Errorf("starter_diagram %s: %w", t.StarterDiagram, err)
 		}
+	} else if t.StarterDiagram != "" {
+		return fmt.Errorf("starter_diagram допустим только для canvas: sketch")
 	}
-	if t.PreferredSolution.Diagram != "" {
-		if _, err := fs.ReadFile(fsys, t.PreferredSolution.Diagram); err != nil {
-			return fmt.Errorf("preferred_solution.diagram %s: %w", t.PreferredSolution.Diagram, err)
+	if strings.TrimSpace(t.PreferredSolution.Narrative) == "" {
+		return fmt.Errorf("пустой preferred_solution.narrative")
+	}
+	if len(t.PreferredSolution.Tradeoffs) < 3 {
+		return fmt.Errorf("preferred_solution.tradeoffs: нужно хотя бы 3")
+	}
+	if t.PreferredSolution.Diagram == "" {
+		return fmt.Errorf("пустой preferred_solution.diagram")
+	}
+	if _, err := fs.ReadFile(fsys, t.PreferredSolution.Diagram); err != nil {
+		return fmt.Errorf("preferred_solution.diagram %s: %w", t.PreferredSolution.Diagram, err)
+	}
+	if len(t.RubricOverrides) < 2 {
+		return fmt.Errorf("rubric_overrides: нужно хотя бы 2 акцента")
+	}
+	seenRubric := map[string]struct{}{}
+	for _, item := range t.RubricOverrides {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			return fmt.Errorf("rubric_overrides содержит пустой акцент")
+		}
+		if _, ok := seenRubric[item]; ok {
+			return fmt.Errorf("дубль rubric_overrides %q", item)
+		}
+		seenRubric[item] = struct{}{}
+	}
+	return nil
+}
+
+func validateRevealRules(rules []RevealRule) error {
+	if len(rules) < 3 {
+		return fmt.Errorf("reveal_on_question: нужно хотя бы 3 правила")
+	}
+	allowed := map[string]struct{}{
+		"hidden.functional":    {},
+		"hidden.nonfunctional": {},
+		"hidden.scale":         {},
+	}
+	covered := map[string]struct{}{}
+	seenID := map[string]struct{}{}
+	for _, rule := range rules {
+		if strings.TrimSpace(rule.ID) == "" || len(rule.Keywords) == 0 || len(rule.Reveal) == 0 {
+			return fmt.Errorf("reveal_on_question: каждому правилу нужны id, keywords и reveal")
+		}
+		if _, ok := seenID[rule.ID]; ok {
+			return fmt.Errorf("дубль reveal_on_question id %s", rule.ID)
+		}
+		seenID[rule.ID] = struct{}{}
+		for _, field := range rule.Reveal {
+			if _, ok := allowed[field]; !ok {
+				return fmt.Errorf("reveal_on_question: неизвестное поле %s", field)
+			}
+			covered[field] = struct{}{}
+		}
+	}
+	for field := range allowed {
+		if _, ok := covered[field]; !ok {
+			return fmt.Errorf("reveal_on_question не покрывает %s", field)
 		}
 	}
 	return nil

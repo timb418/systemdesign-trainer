@@ -1,0 +1,10 @@
+<mxfile host="app.diagrams.net"><diagram id="fanout-starter" name="Старт"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="sql" value="SQL получателей" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="20" y="80" width="130" height="60" as="geometry"/></mxCell>
+<mxCell id="worker" value="Один worker" vertex="1" parent="1"><mxGeometry x="200" y="80" width="110" height="50" as="geometry"/></mxCell>
+<mxCell id="provider" value="Провайдер" vertex="1" parent="1"><mxGeometry x="370" y="80" width="110" height="50" as="geometry"/></mxCell>
+<mxCell id="status" value="Campaign Status" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="200" y="190" width="130" height="60" as="geometry"/></mxCell>
+<mxCell id="e1" value="читать всех" edge="1" parent="1" source="sql" target="worker"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e2" value="по одному" edge="1" parent="1" source="worker" target="provider"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e3" value="писать прогресс" edge="1" parent="1" source="worker" target="status"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram></mxfile>

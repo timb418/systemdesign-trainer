@@ -1,0 +1,61 @@
+id: flash-sale-platform
+title: Платформа флеш-распродаж
+difficulty: 4
+architecture_types:
+  - ecommerce
+duration_min: 60
+canvas: blank
+prompt_public: |
+  Спроектируйте ограниченную по времени распродажу небольшого остатка товара.
+  Уточните справедливость, защиту от oversell и пользовательский путь.
+hidden:
+  functional:
+    - "Пускать покупателей через виртуальную очередь к выбранной акции"
+    - "Показывать остаток приблизительно и создавать краткий reservation"
+    - "Ограничивать покупку двумя единицами на аккаунт и устройство"
+    - "Подтверждать заказ после оплаты или возвращать остаток после expiry"
+    - "Противодействовать ботам и повторному использованию admission token"
+  nonfunctional:
+    - "Подтверждённые заказы никогда не превышают выделенный акции остаток"
+    - "CreateReservation p99 < 500 мс для допущенного клиента"
+    - "Очередь выдерживает региональный сбой без потери принятой позиции"
+    - "Справедливость: порядок допуска следует порядку выдачи queue sequence"
+  scale:
+    - "20 млн посетителей за первую минуту"
+    - "100 тыс. единиц товара в одной акции"
+    - "Внешний фронт принимает 1 млн запросов/с, внутрь допускается 30 тыс./с"
+    - "Пик 15 тыс. успешных reservation/с и 8 тыс. платежей/с"
+    - "Reservation живёт 5 минут, ожидаемая конверсия в оплату 70%"
+reveal_on_question:
+  - id: functional
+    keywords: ["функционал", "требован", "очеред", "остат", "резерв", "лимит", "бот", "оплат"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["oversell", "latency", "задерж", "справедлив", "регион", "надёж", "sla"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["масштаб", "нагруз", "qps", "миллион", "остат", "платеж", "сколько", "пик"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    CDN отдаёт страницу акции, а edge rate limiting, proof-of-work или CAPTCHA и device reputation отсекают простую автоматизацию до дорогих сервисов. Waiting Room создаёт для account/device один durable queue entry с глобально упорядоченным sequence внутри sale_id. Подписанный токен позиции можно повторно использовать только для просмотра статуса. Admission controller следит за p99 inventory, payment backlog и числом активных reservation, затем переводит следующий диапазон sequence в ADMITTED и выдаёт короткоживущий одноразовый admission token. Состояние очереди реплицируется между зонами; новый leader имеет fencing epoch и продолжает с подтверждённого high-water mark.
+
+    Reservation Service шардируется по sale_id и держит авторитетный счётчик available, но сверхгорячую акцию обслуживает один логический consensus leader. CreateReservation проверяет token, purchase-limit ledger и idempotency key. В одной транзакции условное уменьшение available, запись reservation с expires_at, потребление admission token и provisional лимит аккаунта выполняются вместе. Это сериализует успешные изменения, зато верхний admission в 30 тысяч запросов в секунду и batching журнала делают нагрузку ограниченной; приблизительный остаток публикуется через кэш и никогда не используется как гарантия.
+
+    Клиент оплачивает по payment intent. Webhook вызывает идемпотентный Confirm, который условно меняет ACTIVE→CONFIRMED и создаёт order. Durable timer плюс sweeper переводят просроченное ACTIVE→EXPIRED, возвращают quantity и provisional limit; CAS разрешает гонку с confirm ровно одним исходом. Если платёж успешен после expiry, saga делает refund, не создавая oversell. Все переходы и outbox-события находятся в одной БД-транзакции, consumers дедуплицируют event_id.
+
+    При отказе leader запись кратко останавливается до quorum failover; доступность не важнее остатка. Перегрузка платежей уменьшает admission, а не копит бесконечные reservation. Метрики включают queue age и sequence fairness, token replay, bot rejection, admission rate, available invariant, reservation latency, expiry lag, payment mismatch и refund. Алерты реагируют на отрицательный остаток, расхождение ledger, stale leader epoch и очередь вне прогноза; аудит связывает device, account, queue, reservation, payment и order.
+  tradeoffs:
+    - "Строгий FIFO vs лотерея: FIFO прозрачен, лотерея снижает преимущество сетевой близости и ботов."
+    - "Один leader акции vs распределённые квоты: leader проще исключает oversell, квоты дают throughput ценой возврата остатков."
+    - "Reservation перед оплатой vs атомарное списание: reservation улучшает UX, но временно блокирует непроданный товар."
+    - "Точный остаток в UI vs приблизительный: точный создаёт горячие чтения, приблизительный масштабируется."
+    - "Fail-closed vs fail-open при потере quorum: fail-closed сохраняет инвариант, но временно останавливает продажи."
+    - "Жёсткий account limit vs device/signals: аккаунт понятен, дополнительные сигналы усложняют обход ботами."
+  diagram: diagrams/flash-sale-platform.gold.drawio
+rubric_overrides:
+  - "Виртуальная очередь обязана иметь durable sequence и fencing при failover."
+  - "Admission должен динамически защищать inventory и payment, а не только web tier."
+  - "Уменьшение остатка, лимит покупателя и reservation фиксируются атомарно."
+  - "Confirm и expiry должны иметь взаимоисключающие условные переходы."
+  - "Нужно выбрать между одним leader и распределёнными квотами, объяснив oversell."

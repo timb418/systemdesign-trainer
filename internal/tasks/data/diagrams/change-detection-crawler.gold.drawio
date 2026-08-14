@@ -1,0 +1,21 @@
+<mxfile host="app.diagrams.net"><diagram id="gold" name="Эталон"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="api" value="Subscriptions API + URL/Webhook Validation" vertex="1" parent="1"><mxGeometry x="20" y="210" width="210" height="60" as="geometry"/></mxCell>
+<mxCell id="timer" value="Bucket Scheduler + Lease" vertex="1" parent="1"><mxGeometry x="270" y="210" width="170" height="60" as="geometry"/></mxCell>
+<mxCell id="queue" value="Host-aware Queue" style="shape=process" vertex="1" parent="1"><mxGeometry x="480" y="210" width="150" height="60" as="geometry"/></mxCell>
+<mxCell id="policy" value="robots Cache + Shared Host Limiter" vertex="1" parent="1"><mxGeometry x="470" y="60" width="210" height="60" as="geometry"/></mxCell>
+<mxCell id="http" value="HTTP Fetchers + SSRF Guard" vertex="1" parent="1"><mxGeometry x="700" y="120" width="190" height="60" as="geometry"/></mxCell>
+<mxCell id="browser" value="Sandboxed Browser Pool" vertex="1" parent="1"><mxGeometry x="700" y="300" width="180" height="60" as="geometry"/></mxCell>
+<mxCell id="diff" value="Normalizer + Versioned Diff" vertex="1" parent="1"><mxGeometry x="940" y="210" width="180" height="60" as="geometry"/></mxCell>
+<mxCell id="store" value="Snapshots + Metadata + Transactional Outbox" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="920" y="390" width="230" height="80" as="geometry"/></mxCell>
+<mxCell id="hook" value="Signed Webhook Workers" vertex="1" parent="1"><mxGeometry x="690" y="500" width="180" height="60" as="geometry"/></mxCell>
+<mxCell id="e1" value="accepted effective schedule" edge="1" parent="1" source="api" target="timer"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e2" value="due check" edge="1" parent="1" source="timer" target="queue"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e3" value="robots + host token" edge="1" parent="1" source="policy" target="queue"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e4" value="plain URL" edge="1" parent="1" source="queue" target="http"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e5" value="render URL" edge="1" parent="1" source="queue" target="browser"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e6" value="DOM" edge="1" parent="1" source="http" target="diff"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e7" value="rendered DOM" edge="1" parent="1" source="browser" target="diff"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e8" value="CAS version + outbox in one transaction" edge="1" parent="1" source="diff" target="store"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e9" value="stable event_id" edge="1" parent="1" source="store" target="hook"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram></mxfile>

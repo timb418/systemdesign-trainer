@@ -1,0 +1,60 @@
+id: collaborative-whiteboard
+title: Совместная онлайн-доска
+difficulty: 3
+architecture_types:
+  - collab_editing
+  - object_storage
+  - notifications
+duration_min: 55
+canvas: blank
+prompt_public: |
+  Спроектируйте онлайн-доску, на которой несколько пользователей одновременно рисуют фигуры и видят изменения друг друга.
+  Начните с уточнения пользовательского опыта и гарантий синхронизации.
+hidden:
+  functional:
+    - "Создание доски, приглашение участников и роли owner/editor/viewer"
+    - "Добавление, перемещение, изменение и удаление фигур в реальном времени"
+    - "Курсоры и presence участников без долговечного хранения"
+    - "Undo/redo собственных операций и восстановление истории версий"
+    - "Экспорт snapshot доски в PNG или PDF"
+  nonfunctional:
+    - "Локальное отображение операции мгновенно, p95 доставки соавторам < 150 мс в регионе"
+    - "Eventual convergence всех подключённых клиентов после восстановления связи"
+    - "Доступность чтения 99.95%, потеря подтверждённых операций недопустима"
+    - "Офлайн-редактирование до 30 минут с последующим merge"
+    - "Presence может теряться, но права доступа проверяются на сервере для каждой операции"
+  scale:
+    - "20 млн MAU и 1 млн одновременно подключённых пользователей"
+    - "До 200 активных редакторов на одной доске"
+    - "Пик 800k операций фигур/с и 3 млн presence-событий/с"
+    - "До 100k фигур на доске, snapshot в среднем 5 МБ"
+    - "История операций 30 дней, snapshots бессрочно"
+reveal_on_question:
+  - id: functional
+    keywords: ["функционал", "фигур", "курсор", "presence", "undo", "истори", "экспорт", "права"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["latency", "задержк", "консист", "сходим", "offline", "доступн", "потер", "безопас"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["mau", "онлайн", "qps", "масштаб", "сколько", "фигур", "размер", "retention"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Клиент загружает GET /boards/{id}/snapshot?version=V, затем открывает WebSocket /boards/{id}/sync с access token. Операция имеет op_id, actor_id, board_id, client_seq, base_version и команду над объектом shape_id: create, set-property, transform или delete. UI применяет её оптимистично. Realtime gateway проверяет ACL и маршрутизирует board_id к session shard. Для геометрических объектов удобно использовать CRDT-карту: существование задаётся add/remove с tombstone, свойства — LWW-регистрами с серверным hybrid logical clock, а порядок слоёв — sequence CRDT. Конкурентные перемещения сходятся детерминированно, хотя пользовательский intent при одновременном drag обсуждается отдельно.
+
+    Shard назначает монотонный board sequence, пишет операцию в RF=3 append log и после quorum подтверждает клиенту. Pub/sub fan-out рассылает committed operations всем gateway с подписчиками. Клиенты обнаруживают пропуски по sequence и запрашивают диапазон; после долгого разрыва получают свежий snapshot плюс хвост. Snapshotter периодически сворачивает CRDT, сохраняет blob в object storage и фиксирует checksum/version в metadata SQL. История позволяет time travel, а undo создаёт новую компенсирующую операцию и не удаляет общий журнал.
+
+    Presence и курсоры идут отдельным lossy-каналом с coalescing, TTL и частотой не выше 10 Гц: они не должны конкурировать с долговечными изменениями. Горячая доска закрепляется за одним writer shard, но fan-out распределяется; огромная доска может загружаться по spatial tiles. При отказе writer реплика продолжает после committed sequence, клиенты resend-ят неподтверждённые op_id, дедупликация исключает повтор. ACL cache инвалидируется по версии политики. Наблюдаемость включает sync latency, reconnect rate, missing-sequence repairs, snapshot lag/size, CRDT tombstones, hot-board fan-out, rejected ACL и divergence checksum; trace проходит от client_seq до committed sequence.
+  tradeoffs:
+    - "CRDT сохраняет офлайн-merge без центральной блокировки, но метаданные и семантика undo сложнее."
+    - "Один writer на доску даёт простой порядок, но горячая доска ограничена одним shard."
+    - "Долговечный лог для фигур и lossy presence разделяют гарантии, но требуют двух каналов клиента."
+    - "Полный snapshot прост, spatial tiles ускоряют большие доски ценой сложного viewport loading."
+    - "LWW для координат сходится, но может потерять intent одновременных перемещений."
+  diagram: diagrams/collaborative-whiteboard.gold.drawio
+rubric_overrides:
+  - "Кандидат отделяет durable-операции от ephemeral presence."
+  - "Кандидат определяет конфликтную семантику create/delete/property/ordering, а не говорит только «используем CRDT»."
+  - "Протокол reconnect умеет закрывать пропуски snapshot плюс хвостом."
+  - "Undo моделируется новой операцией в общей истории."

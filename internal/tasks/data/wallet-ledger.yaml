@@ -1,0 +1,60 @@
+id: wallet-ledger
+title: Кошелёк и двойная бухгалтерия
+difficulty: 4
+architecture_types:
+  - payments
+  - key_value_store
+duration_min: 70
+canvas: blank
+prompt_public: |
+  Спроектируйте внутренний кошелёк: пользователи пополняют баланс, переводят деньги друг другу и выводят средства.
+  Уточните финансовые инварианты и модель хранения.
+hidden:
+  functional:
+    - "Пополнение, перевод между кошельками и вывод средств"
+    - "Авторизация суммы с последующим capture или release"
+    - "Получение доступного и бухгалтерского баланса и истории"
+    - "Идемпотентная обработка клиентских команд и provider webhooks"
+    - "Reversal корректирующей проводкой без удаления исходной"
+  nonfunctional:
+    - "Сумма всех дебетов равна сумме всех кредитов в каждой транзакции"
+    - "Баланс не уходит ниже нуля для кошельков без кредитного лимита"
+    - "Линеаризуемые денежные переходы, подтверждённая проводка не теряется"
+    - "p99 внутреннего перевода < 300 мс, доступность записи 99.99%"
+    - "Неизменяемый аудит 10 лет и ежедневная сверка с провайдерами"
+  scale:
+    - "100 млн кошельков и 20 млн активных в день"
+    - "Средняя нагрузка 50k транзакций/с, пик 200k/с"
+    - "До 20 валют, отдельный ledger на валюту без скрытой конвертации"
+    - "500 млрд postings за 10 лет, около 100 ТБ индексов"
+    - "Горячий merchant-кошелёк получает 10k операций/с"
+reveal_on_question:
+  - id: functional
+    keywords: ["пополн", "перевод", "вывод", "hold", "авторизац", "capture", "баланс", "истори", "reversal"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["инвариант", "двойн", "отриц", "консист", "линеар", "latency", "аудит", "сверк"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["кошель", "qps", "масштаб", "валют", "posting", "объём", "горяч", "лет"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Команда POST /transfers содержит idempotency_key, debit_wallet, credit_wallet, amount_minor и currency. API не изменяет поле balance напрямую. В одной serializable транзакции создаётся LedgerTransaction и минимум два immutable Posting: debit одного account и credit другого; сумма postings по currency обязана быть нулевой. Уникальный индекс (tenant_id, idempotency_key) возвращает прежний transaction_id при повторе. Account различает available, pending и settled buckets: authorize переносит сумму available→pending, capture переводит pending в merchant payable, release возвращает её. Reversal создаёт связанную обратную транзакцию, сохраняя исходный аудит.
+
+    Для предотвращения overdraft сервис блокирует участвующие account rows в детерминированном порядке либо применяет conditional update по version и проверяет available >= amount. Ledger и balance projection фиксируются в одной базе; баланс — производная кэшированная проекция, которую можно восстановить из postings и периодических signed checkpoints. Горячий merchant не должен быть единственной блокируемой строкой: входящие средства пишутся на виртуальные subaccounts по shard, а агрегированный баланс считается проекцией; расходная сторона проходит через контролируемый treasury account.
+
+    Шардирование по wallet_id конфликтует с атомарным переводом между shard. На данном масштабе выбирается routing directory и набор ledger shards с транзакционным coordinator для ограниченного 2PC внутри собственной БД. Coordinator сначала создаёт durable transaction record, участники в детерминированном порядке блокируют account/version, проверяют валюту и available, записывают prepared postings, а затем coordinator фиксирует неизменяемый COMMIT/ABORT decision в quorum log. После сбоя участник с prepared state запрашивает decision; новый fenced coordinator продолжает тот же transaction_id, поэтому timeout не превращается в новую транзакцию. Альтернатива — держать пары в одном regional ledger и масштабировать по юридическому entity. Решение не распространяет 2PC на внешних провайдеров: deposit/withdrawal имеют suspense account и завершаются webhook плюс reconciliation. Репликация синхронна между тремя зонами, чтение spendable balance идёт с leader. Метрики проверяют zero-sum invariant, overdraft attempts, posting/transaction mismatch, prepared age, coordinator recovery, lock contention, hot account, replication lag, suspense age и reconciliation breaks. Audit trail содержит actor, request hash, postings и причинную ссылку без update/delete.
+  tradeoffs:
+    - "Immutable double-entry ledger сложнее простого balance, но делает инварианты и аудит проверяемыми."
+    - "Serializable транзакции защищают деньги, но требуют контроля contention и коротких критических секций."
+    - "2PC внутри доверенного storage даёт атомарный cross-shard transfer, но снижает доступность при coordinator failure."
+    - "Шардированные merchant subaccounts снимают hot row, но усложняют доступный агрегированный баланс."
+    - "Сильное чтение баланса дороже follower read, зато не разрешает потратить устаревшие средства."
+  diagram: diagrams/wallet-ledger.gold.drawio
+rubric_overrides:
+  - "Кандидат формулирует zero-sum postings и запрет мутации истории."
+  - "Available, pending и settled моделируются проводками, а не флагом в платеже."
+  - "Решена атомарность перевода и защита от overdraft при конкуренции."
+  - "Внешние деньги проходят suspense и reconciliation."
+  - "Обсуждается hot merchant account."

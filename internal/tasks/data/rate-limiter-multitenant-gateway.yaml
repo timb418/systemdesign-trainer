@@ -1,0 +1,85 @@
+id: rate-limiter-multitenant-gateway
+title: Мультитенантный limiter API Gateway
+difficulty: 3
+architecture_types:
+  - rate_limiter
+  - api_gateway
+  - payments
+duration_min: 55
+canvas: blank
+prompt_public: |
+  Спроектируйте rate limiting в SaaS API Gateway: разные тарифы, вложенные квоты и защита от noisy neighbor.
+hidden:
+  functional:
+    - "Проверять одновременно tenant, API key, route и global dependency quota"
+    - "Поддерживать тарифные планы и purchased burst credits"
+    - "Справедливо делить остаток между ключами tenant"
+    - "Показывать клиенту quota headers и reason code"
+    - "Давать support безопасный временный override"
+  nonfunctional:
+    - "Overhead p99 менее 5 мс"
+    - "Один tenant не потребляет более 30% capacity общего shard; более крупный tenant переводится на dedicated shard"
+    - "Изменение плана действует за 15 секунд"
+    - "Биллинг usage теряет не более 0.01% решений"
+    - "Нельзя раскрывать лимиты соседних tenants"
+  scale:
+    - "1 млн tenants, 50 млн API keys"
+    - "Глобально 500k RPS через 20 региональных gateway-кластеров"
+    - "Крупнейший tenant даёт 60k RPS"
+    - "До 4 иерархических buckets проверяются на запрос"
+    - "Usage ledger хранится 400 дней"
+reveal_on_question:
+  - id: functional
+    keywords: ["иерархические квоты", "tariff plan", "burst credits", "fair sharing", "support override"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["gateway overhead", "noisy neighbor", "plan propagation", "billing completeness", "tenant isolation"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["число tenants", "API keys", "global gateway RPS", "largest tenant RPS", "usage retention"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    Gateway формирует canonical tuple tenant/key/route/cost и вызывает CheckMany; ответ возвращает самое ограничивающее правило, remaining и reset.
+    Admin override подписан, ограничен scope и TTL; quota endpoint показывает только данные tenant.
+    Модель данных.
+    Policy graph связывает plan, tenant override, key и route.
+    Decision transaction списывает несколько bucket IDs с общим request_id.
+    Неизменяемый usage ledger хранит allowed cost, policy_version, region и billing dimension.
+    Основные потоки.
+    Локальные leases уменьшают remote checks, но hierarchical consume выполняется атомарно в regional limiter.
+    Global dependency quota выдаёт регионам budget slices; allocator перераспределяет их по demand.
+    До ответа gateway limiter фиксирует decision в локальном replicated WAL/outbox; relay отправляет его в durable usage log, а reconciliation сверяет sequence gaps.
+    Масштабирование.
+    Tenant keys хешируются, virtual shards и admission защищают от noisy neighbor.
+    Hot enterprise tenant получает выделенный shard без изменения semantics.
+    Региональные slices обновляются чаще при быстром росте и имеют bounded emergency reserve.
+    Согласованность.
+    Все вложенные buckets либо списаны одной транзакцией, либо ни один.
+    Глобальная quota приблизительна в пределах региональных slices; policy_version и epoch аннулируют старые leases.
+    Ledger дедуплицирует request_id при повторной доставке; per-shard sequence позволяет обнаружить пропуск и переиграть WAL.
+    Отказы и восстановление.
+    При отказе shard gateway использует короткий conservative lease только для безопасных reads; денежные операции закрываются.
+    Застрявший global allocator не продлевает slice выше floor.
+    Override автоматически истекает и оставляет audit event.
+    Наблюдаемость.
+    Наблюдаются deny по policy level, fairness внутри tenant, shard saturation, slice utilization, lease overshoot, policy lag и полнота ledger.
+    High-cardinality tenants доступны через traces/exemplars, а не постоянные labels.
+    Практические решения.
+    Weighted fair sharing применяется только к избытку, базовые договорные квоты остаются предсказуемыми.
+    Billing pipeline сверяет непрерывность sequence и ledger с gateway samples; purchased credits списываются только по дедуплицированным allowed decisions.
+    Capacity тест моделирует tenant с 60k RPS и массовую ротацию ключей.
+  tradeoffs:
+    - "Атомарная иерархия против последовательных проверок: корректность против latency"
+    - "Региональные slices против глобального check: доступность против overshoot"
+    - "Общий shard против dedicated shard крупного tenant"
+    - "Leases против точного usage billing"
+    - "Fair sharing против простых статических квот"
+  diagram: diagrams/rate-limiter-multitenant-gateway.gold.drawio
+rubric_overrides:
+  - "Оценивается атомарное списание всех уровней quota"
+  - "Нужна защита от noisy neighbor и hot tenant"
+  - "Кандидат должен различать enforcement и billing ledger"
+  - "Глобальный бюджет требует количественно ограниченного regional overshoot"
+  - "Override обязан иметь scope, TTL и аудит"

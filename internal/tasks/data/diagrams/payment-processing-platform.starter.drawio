@@ -1,0 +1,13 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="starter" name="Исходная схема"><mxGraphModel dx="900" dy="500" grid="1"><root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="buyer" value="Покупатель" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="30" y="170" width="130" height="60" as="geometry"/></mxCell>
+    <mxCell id="checkout" value="Checkout Service" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="230" y="170" width="150" height="60" as="geometry"/></mxCell>
+    <mxCell id="provider" value="Единственный Provider API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;" vertex="1" parent="1"><mxGeometry x="470" y="160" width="180" height="80" as="geometry"/></mxCell>
+    <mxCell id="orders" value="Orders DB&#xa;payment_status" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="740" y="160" width="150" height="80" as="geometry"/></mxCell>
+    <mxCell id="e1" value="checkout(card data)" edge="1" parent="1" source="buyer" target="checkout"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="charge(amount)" edge="1" parent="1" source="checkout" target="provider"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="set paid/failed" edge="1" parent="1" source="checkout" target="orders"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" value="synchronous result" edge="1" parent="1" source="provider" target="checkout"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root></mxGraphModel></diagram>
+</mxfile>

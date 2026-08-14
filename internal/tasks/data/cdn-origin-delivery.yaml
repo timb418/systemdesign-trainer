@@ -1,0 +1,89 @@
+id: cdn-origin-delivery
+title: Origin для CDN-раздачи
+difficulty: 3
+architecture_types:
+  - object_storage
+  - distributed_cache
+  - api_gateway
+duration_min: 50
+canvas: blank
+prompt_public: |
+  Спроектируйте origin и контур доставки статических объектов через CDN: cache miss, invalidation, signed access и защита от origin overload.
+hidden:
+  functional:
+    - "Раздавать публичные и приватные объекты через CDN"
+    - "Поддерживать versioned URLs и purge"
+    - "Обрабатывать range requests"
+    - "Подписывать доступ с expiry и policy"
+    - "Строго отзывать скомпрометированный приватный доступ отдельным emergency revoke"
+    - "Защищать origin при массовом cache miss"
+  nonfunctional:
+    - "Cache-hit p95 менее 50 мс"
+    - "Origin fetch p99 менее 800 мс"
+    - "Доступность раздачи 99.99%"
+    - "Purge достигает 95% PoP за 30 секунд"
+    - "Emergency revoke блокирует приватный объект во всех здоровых PoP за 5 секунд"
+    - "Origin выдерживает потерю одной зоны"
+  scale:
+    - "10 ПБ хранимых объектов"
+    - "Глобальный egress 20 Тбит/с"
+    - "CDN hit ratio 97%"
+    - "Пик origin miss 300k RPS"
+    - "Крупнейший объект 50 ГБ, range 8 МБ"
+reveal_on_question:
+  - id: functional
+    keywords: ["public private delivery", "versioned URL", "range request", "signed cookie", "origin miss collapse", "emergency revoke"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["edge hit p95", "origin fetch p99", "purge propagation", "revoke deadline", "zone failure"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["stored petabytes", "global egress", "CDN hit ratio", "origin miss RPS", "range size"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    Client получает immutable version URL или signed cookie.
+    Edge локально валидирует signature, key_id, expiry и policy из подписанного key/policy snapshot; control plane ротирует ключи и epochs без синхронного auth RPC.
+    Edge кэширует ranges; shield обращается к Origin API с object version. Purge API принимает key/version и возвращает operation status, а Emergency Revoke API требует повышенных прав и отдельный strict operation status.
+    Модель данных.
+    Metadata связывает tenant/key/version, etag, size, content_type и ACL epoch.
+    Blob immutable и replicated.
+    Ordinary purge event имеет monotonic generation и SLO 95% PoP за 30 секунд. Emergency deny имеет отдельный epoch, high-priority replicated channel и подтверждение всех здоровых PoP; negative cache различает absent и temporarily unavailable.
+    Основные потоки.
+    Запрос проходит edge, regional shield и origin.
+    Shield coalesces одинаковые misses и делает range alignment.
+    Upload публикация сначала durable blob, затем metadata/version URL; ordinary purge обновляет mutable aliases и является best-effort по PoP, а emergency revoke немедленно запрещает приватный tenant/key/version независимо от cached body.
+    Масштабирование.
+    PoP масштабируется CDN, origin читает multi-AZ object store.
+    Shields уменьшают amplification; per-tenant quotas и token bucket защищают origin.
+    Hot object заранее prewarm по выбранным регионам.
+    Согласованность.
+    Version URL позволяет долгий immutable TTL.
+    Mutable alias использует generation validation.
+    Private ACL epoch и локальный emergency deny проверяются до cache response. Key/policy distributor пушит подписанные snapshots и deltas; edge хранит last-known-good keys, но deny epoch не откатывает.
+    Отказы и восстановление.
+    При падении origin edge отдаёт stale-if-error только публичный immutable объект.
+    Miss storm сдерживают collapsed forwarding, backoff и serve-stale.
+    Purge consumer восстанавливает gap по generation snapshot.
+    Наблюдаемость.
+    Метрики hit ratio edge/shield, origin RPS/bytes, collapsed requests, range amplification, stale serves, purge propagation, auth rejects и 4xx/5xx.
+    Synthetic probes проверяют регионы и revoked token.
+    Практические решения.
+    Cache key включает tenant, version и допустимые варианты encoding/range, но не секретный query token.
+    ETag поддерживает conditional GET.
+    Логи доступа семплируются и не попадают на критический путь.
+  tradeoffs:
+    - "Immutable version URL против mutable alias: высокий hit ratio без purge против удобного стабильного URL"
+    - "Обычный purge 95% PoP против emergency revoke all-healthy-PoP: дешёвая инвалидация против строгого блокирования с большим control-plane cost"
+    - "Локальная edge-проверка signed policy против auth RPC: низкая latency и автономность против задержки ротации keys/epochs"
+    - "Regional shield против прямого origin fetch: collapse miss storm против дополнительного hop"
+    - "Serve-stale только public immutable против отказа: доступность публичного контента без утечки revoked private object"
+    - "Aligned range cache против whole-object cache: экономия egress для 50-ГБ объектов против большего числа cache entries"
+  diagram: diagrams/cdn-origin-delivery.gold.drawio
+rubric_overrides:
+  - "Оценивается защита origin от thundering herd"
+  - "Нужно правильно сформировать cache key без токена"
+  - "Private revoke не может полагаться только на TTL"
+  - "Следует разделить обычный purge и подтверждаемый emergency revoke"
+  - "Кандидат должен объяснить edge, shield и origin роли"

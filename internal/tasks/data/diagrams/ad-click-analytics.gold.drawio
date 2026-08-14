@@ -1,0 +1,23 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон"><mxGraphModel dx="1400" dy="900" grid="1"><root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="ads" value="Ad Clients / Partners" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="20" y="180" width="160" height="60" as="geometry"/></mxCell>
+    <mxCell id="collector" value="Edge Collector&#xa;schema + privacy" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1"><mxGeometry x="220" y="170" width="160" height="80" as="geometry"/></mxCell>
+    <mxCell id="log" value="Event Log RF=3&#xa;campaign + salt" style="shape=process;whiteSpace=wrap;html=1;fillColor=#ffe6cc;" vertex="1" parent="1"><mxGeometry x="440" y="170" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="stream" value="Event-time Processor&#xa;dedupe/watermark/bot" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" vertex="1" parent="1"><mxGeometry x="670" y="160" width="190" height="100" as="geometry"/></mxCell>
+    <mxCell id="olap" value="Serving OLAP&#xa;versioned upserts" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="920" y="50" width="180" height="90" as="geometry"/></mxCell>
+    <mxCell id="dashboard" value="Realtime Dashboard&#xa;provisional/final" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="1160" y="70" width="180" height="80" as="geometry"/></mxCell>
+    <mxCell id="lake" value="Immutable Raw Lake" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="680" y="360" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="batch" value="48h Final Batch&#xa;versioned rules" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;" vertex="1" parent="1"><mxGeometry x="920" y="350" width="180" height="90" as="geometry"/></mxCell>
+    <mxCell id="billing" value="Signed Billing Report" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f8cecc;" vertex="1" parent="1"><mxGeometry x="1170" y="360" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="e1" value="impression/click/conversion" edge="1" parent="1" source="ads" target="collector"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="event_id durable append" edge="1" parent="1" source="collector" target="log"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="event-time partitions" edge="1" parent="1" source="log" target="stream"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" value="aggregate version updates" edge="1" parent="1" source="stream" target="olap"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e5" value="fresh CTR / spend queries" edge="1" parent="1" source="dashboard" target="olap"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e6" value="raw immutable archive" edge="1" parent="1" source="log" target="lake"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e7" value="closed raw partitions" edge="1" parent="1" source="lake" target="batch"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e8" value="compare streaming totals" edge="1" parent="1" source="olap" target="batch"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e9" value="signed immutable manifest" edge="1" parent="1" source="batch" target="billing"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root></mxGraphModel></diagram>
+</mxfile>

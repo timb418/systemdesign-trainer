@@ -1,0 +1,85 @@
+id: url-shortener-global
+title: Глобальный сокращатель ссылок
+difficulty: 4
+architecture_types:
+  - url_shortener
+  - distributed_cache
+  - key_value_store
+duration_min: 60
+canvas: sketch
+starter_diagram: diagrams/url-shortener-global.starter.drawio
+prompt_public: |
+  Перед вами одно-региональный сокращатель ссылок. Превратите его в глобальный сервис с локальными редиректами и переживанием потери региона.
+hidden:
+  functional:
+    - "Создавать ссылки в любом из трёх регионов"
+    - "Редиректить пользователя через ближайший здоровый регион"
+    - "Поддерживать глобально уникальные кастомные alias"
+    - "Блокировать вредоносную ссылку глобально не позднее заданного срока"
+    - "Переносить домашний регион владельца без смены короткого кода"
+  nonfunctional:
+    - "p99 редиректа менее 80 мс для 95% мировой аудитории"
+    - "Доступность redirect 99.99% в месяц"
+    - "Потеря целого региона не прерывает чтения более 60 секунд"
+    - "Глобальная блокировка распространяется до 30 секунд"
+    - "RPO созданных ссылок не хуже 5 секунд"
+  scale:
+    - "3 активных региона и 120 млн активных ссылок"
+    - "150k QPS редиректов глобально, 40% приходится на один регион"
+    - "2k QPS создания ссылок в пике"
+    - "Кэш hit ratio целевой 98%"
+    - "Один viral code может получать 25k QPS"
+reveal_on_question:
+  - id: functional
+    keywords: ["создание в регионе", "глобальный редирект", "custom alias", "блокировка ссылки", "перенос home region"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["глобальный p99", "потеря региона", "RPO ссылок", "время блокировки", "redirect availability"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["число регионов", "global redirect QPS", "create QPS", "viral code", "cache hit ratio"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    Global DNS/Anycast направляет GET /{code} в ближайший регион; POST /links принимает idempotency key и возвращает home_region/version.
+    Admin block API требует аудит и формирует глобальное invalidation-событие.
+    Модель данных.
+    Code содержит region/shard hint для сгенерированных ссылок, но custom alias хранится в глобальном strongly-consistent registry.
+    Региональные записи имеют code, target, version, home_region, status; tombstone блокировки имеет приоритет над stale active.
+    Основные потоки.
+    Создание резервирует код локально либо alias через global registry, пишет региональный quorum и публикует change log.
+    Redirect проверяет edge cache, затем региональный cache/store; miss может читать home region.
+    Block event инвалидирует edge и региональные кэши.
+    Масштабирование.
+    Каждый регион имеет stateless fleet, Redis cluster и replicated KV.
+    Viral keys копируются по edge PoP и защищаются request coalescing.
+    Lagging consumer догоняет change log snapshot; capacity планируется так, чтобы два региона приняли трафик третьего.
+    Согласованность.
+    Обычная новая ссылка допускает bounded eventual replication с read-your-write token владельцу.
+    Alias reservation и block tombstone требуют сильного порядка.
+    Conflict resolver выбирает большую version, а tombstone нельзя воскресить старой репликой.
+    Отказы и восстановление.
+    Health routing исключает регион, но DNS TTL дополняется клиентским retry.
+    При разрыве межрегиональной сети создание alias останавливается или разрешаются только auto codes.
+    Повреждённый change log восстанавливается из snapshot плюс checksum reconciliation.
+    Наблюдаемость.
+    По регионам измеряются redirect SLI, route distance, cache hit, cross-region fallback, replication lag и stale-read probes.
+    Отдельные алерты следят за временем распространения block, конфликтами версий, hot keys и запасом failover capacity.
+    Практические решения.
+    Стартовую single-primary схему заменяют active-active чтения и контролируемые записи.
+    Глобальный consensus не ставится на каждый redirect.
+    Runbook регулярно отключает регион; synthetic probes создают ссылку, читают её из других регионов и затем блокируют.
+  tradeoffs:
+    - "Active-active против home-region writes: локальная запись против простого разрешения конфликтов"
+    - "Region prefix в коде против полностью opaque кода: маршрутизация против утечки топологии"
+    - "Global consensus для alias против доступности записи при partition"
+    - "Edge TTL против скорости глобальной блокировки"
+    - "Тёплый резерв capacity против стоимости"
+  diagram: diagrams/url-shortener-global.gold.drawio
+rubric_overrides:
+  - "Кандидат должен явно исправить single-region ограничения стартовой схемы"
+  - "Особо оценивается глобальная уникальность custom alias"
+  - "Блокировка вредоносного URL не может ждать обычный TTL"
+  - "Нужен реалистичный failover с capacity и RPO/RTO"
+  - "Следует разделить consistency обычных кодов и alias"

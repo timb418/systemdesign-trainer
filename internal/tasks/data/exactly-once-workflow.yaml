@@ -1,0 +1,62 @@
+id: exactly-once-workflow
+title: Workflow с эффектом ровно один раз
+difficulty: 4
+architecture_types:
+  - queues
+  - payments
+  - key_value_store
+duration_min: 70
+canvas: sketch
+starter_diagram: diagrams/exactly-once-workflow.starter.drawio
+prompt_public: |
+  На доске показан простой workflow: API кладёт команду в очередь, worker вызывает внешний сервис и записывает результат.
+  Требуется не допустить повторного бизнес-эффекта даже при сбоях. Разберите ограничения исходной схемы и спроектируйте решение.
+hidden:
+  functional:
+    - "Запуск многошагового workflow с устойчивым статусом каждого шага"
+    - "Вызов внешнего платёжного API без повторного списания"
+    - "Повтор шага после timeout и восстановление зависших workflow"
+    - "Компенсация уже выполненных шагов при окончательном отказе"
+    - "Запрос статуса и аудит всех решений оркестратора"
+  nonfunctional:
+    - "Exactly-once относится к бизнес-эффекту, а транспорт остаётся at-least-once"
+    - "Нельзя использовать распределённую транзакцию с внешним провайдером"
+    - "99.99% workflow завершаются или переходят в ручное разбирательство без потери состояния"
+    - "p99 принятия команды < 150 мс; долгий workflow асинхронен"
+    - "Состояние должно переживать потерю зоны и повтор событий"
+  scale:
+    - "25k новых workflow/с, пик 70k/с"
+    - "До 20 шагов и 7 дней жизни одного workflow"
+    - "40 внешних провайдеров, timeout ответа до 30 секунд"
+    - "500 млн активных или недавно завершённых workflow"
+    - "Аудит хранится 7 лет, около 3 ПБ до сжатия"
+reveal_on_question:
+  - id: functional
+    keywords: ["шаг", "статус", "плат", "повтор", "компенсац", "аудит", "завис"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["exactly", "ровно один", "транзакц", "гаранти", "доступн", "latency", "зона", "дубликат"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["qps", "масштаб", "сколько", "шаг", "дней", "провайдер", "retention", "объём"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    API POST /workflows принимает client_request_id и команду, а GET /workflows/{id} возвращает материализованное состояние. Уникальный индекс (tenant_id, client_request_id) делает создание идемпотентным. Источник истины — реплицируемый журнал переходов WorkflowEvent; snapshot содержит workflow_id, definition_version, current_step, state и version. В одной транзакции оркестратор выполняет compare-and-swap состояния и пишет outbox-команду. Relay публикует её в partition очереди по workflow_id, поэтому повтор публикации безопасен и события одного workflow упорядочены.
+
+    Worker хранит inbox с уникальным command_id. Для внутренней БД бизнес-изменение и отметка inbox делаются одной локальной транзакцией. Для внешнего платежа распределённой транзакции нет: используется стабильный provider_idempotency_key, производный от workflow_id и step_id. Контракт провайдера обязан хранить ключ и результат не меньше максимального workflow/reconciliation horizon; effective expiry записывается рядом с шагом. При timeout worker не начинает новый логический платёж, а повторяет тот же ключ и при возможности сначала запрашивает GET /operations/{key}. После expiry ключа неоднозначный шаг нельзя безопасно повторять: он замораживается в NEEDS_RECONCILIATION. Результат пишется в outbox worker-а и может доставляться многократно; state machine принимает его один раз по command_id и ожидаемой версии.
+
+    Lease с fencing epoch не даёт двум оркестраторам одновременно продвигать экземпляр. Watchdog переиздаёт зависшие команды, exponential backoff защищает провайдера, circuit breaker и per-provider bulkhead локализуют отказ. Если шаг необратимо неуспешен, запускаются идемпотентные компенсации в обратном порядке; неоднозначный внешний результат переводится в NEEDS_RECONCILIATION, а не объявляется ошибкой. Таким образом exactly-once достигается на уровне наблюдаемого эффекта совместным контрактом, а не очередью. Хранилище шардируется по workflow_id, RF=3 между зонами; архив событий уходит в object storage. Метрики: возраст workflow, transition conflicts, inbox duplicates, outbox lag, ambiguous outcomes, compensation failures, provider latency и reconciliation backlog. Trace связывает request, command и provider key, а неизменяемый аудит объясняет каждый переход.
+  tradeoffs:
+    - "Оркестрация проще для аудита, чем хореография, но создаёт центральный компонент управления."
+    - "Event log обеспечивает воспроизводимость, но требует snapshot-ов и версионирования схем событий."
+    - "Idempotency key у провайдера даёт exactly-once эффект только до expiry; после него ambiguous шаг требует ручной reconciliation без повторного списания."
+    - "Автоматическая компенсация быстрее, но не все эффекты обратимы; ambiguous outcome требует reconciliation."
+    - "Последовательность по workflow_id упрощает state machine, но один очень длинный workflow нельзя распараллелить без DAG."
+  diagram: diagrams/exactly-once-workflow.gold.drawio
+rubric_overrides:
+  - "Кандидат прямо отвергает магическое exactly-once транспорта и определяет границу бизнес-эффекта."
+  - "Outbox, inbox и idempotency key показаны как разные механизмы."
+  - "Timeout внешнего вызова рассматривается как неизвестный результат, а не безопасный failure."
+  - "Предусмотрены fencing, компенсации и ручная reconciliation."
+  - "Кандидат анализирует слабые места стартовой схемы."

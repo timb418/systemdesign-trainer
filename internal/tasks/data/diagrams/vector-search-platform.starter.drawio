@@ -1,0 +1,10 @@
+<mxfile host="app.diagrams.net"><diagram id="vector-starter" name="Старт"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="client" value="ML-клиент" vertex="1" parent="1"><mxGeometry x="20" y="80" width="100" height="50" as="geometry"/></mxCell>
+<mxCell id="api" value="Vector API" vertex="1" parent="1"><mxGeometry x="170" y="80" width="110" height="50" as="geometry"/></mxCell>
+<mxCell id="db" value="Одна vector DB" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="340" y="80" width="130" height="60" as="geometry"/></mxCell>
+<mxCell id="scan" value="Линейное сравнение" vertex="1" parent="1"><mxGeometry x="520" y="80" width="140" height="50" as="geometry"/></mxCell>
+<mxCell id="e1" value="top-K запрос" edge="1" parent="1" source="client" target="api"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e2" value="читать все векторы" edge="1" parent="1" source="api" target="db"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e3" value="полный перебор" edge="1" parent="1" source="db" target="scan"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram></mxfile>

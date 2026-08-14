@@ -1,0 +1,85 @@
+id: personalized-feed
+title: Персонализированная лента
+difficulty: 3
+architecture_types:
+  - feed
+  - search
+  - metrics
+duration_min: 55
+canvas: blank
+prompt_public: |
+  Спроектируйте персонализированную ленту контента. Обсудите генерацию кандидатов, ранжирование, свежесть и безопасный rollout моделей.
+hidden:
+  functional:
+    - "Смешивать подписки, рекомендации и рекламные кандидаты"
+    - "Ранжировать с учётом интересов и свежести"
+    - "Исключать просмотренное, скрытое и запрещённое"
+    - "Поддерживать cursor и бесконечную прокрутку"
+    - "Давать объяснимый reason для рекомендации"
+  nonfunctional:
+    - "p99 выдачи менее 250 мс"
+    - "Доступность 99.95%"
+    - "Новая подписка влияет на ленту за 1 минуту"
+    - "Не менее 20% слотов резервируется свежему контенту"
+    - "Модель откатывается за 5 минут"
+  scale:
+    - "50 млн DAU и 1 млн запросов/с в глобальном пике"
+    - "До 5k кандидатов на запрос, возвращается 30"
+    - "Feature vector пользователя 20 КБ"
+    - "Model QPS после кэша 200k"
+    - "Эксперимент одновременно охватывает до 50 вариантов"
+reveal_on_question:
+  - id: functional
+    keywords: ["candidate sources", "recommendation ranking", "seen filtering", "infinite scroll", "reason code"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["feed p99", "fresh content quota", "model rollback", "new follow freshness", "policy safety"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["feed DAU", "requests per second", "candidates per request", "feature vector size", "model QPS"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    Feed API принимает user, cursor, locale и experiment assignments.
+    Candidate services возвращают typed candidates; ranker выдаёт score и reason code.
+    Cursor фиксирует session_id, model_version и consumed set summary.
+    Модель данных.
+    Online feature store хранит user/content features с event_time и freshness.
+    Candidate envelope содержит source, score_hint, policy labels.
+    Session store хранит выданные IDs; impression log — фактически показанные позиции.
+    Основные потоки.
+    Оркестратор параллельно запрашивает social, retrieval и trending, применяет hard policy filters, batch feature fetch, pre-rank и дорогой rank.
+    Mixer соблюдает source quotas; impression отправляется только после client ack.
+    Масштабирование.
+    Retrieval индексы шардируются по locale/topic, ranker autoscale по GPU/CPU saturation.
+    Candidate timeout budget и hedged request защищают общий p99.
+    Популярные anonymous cohorts кэшируют pre-ranked pools.
+    Согласованность.
+    Feature store eventual consistent; model получает freshness indicators.
+    В рамках session model_version закреплена, чтобы pagination не прыгала.
+    Seen-set допускает approximate membership, но policy block — строгая свежая проверка.
+    Отказы и восстановление.
+    При timeout recommendation source используется social/trending fallback.
+    Ranker circuit breaker переключает last-known-good модель.
+    Feature miss заполняется default с флагом; corrupt model artifact не проходит canary и checksum.
+    Наблюдаемость.
+    Измеряются latency budget каждого stage, candidate yield/diversity, feature freshness, fallback rate, model score drift, CTR с guardrail hide/report, duplicates и impression-log completeness.
+    Эксперименты имеют SLO и fairness slices.
+    Практические решения.
+    Offline обучение читает impression/click с unbiased logging и correction position bias.
+    Shadow и canary предшествуют rollout.
+    Privacy удаляет user features и ограничивает retention raw behavior.
+  tradeoffs:
+    - "Онлайн rank против precompute: свежесть против стоимости"
+    - "Точный seen-set против Bloom filter"
+    - "Единая модель против cascade pre-rank/rank"
+    - "Hedging против дополнительной нагрузки"
+    - "CTR optimization против diversity и safety guardrails"
+  diagram: diagrams/personalized-feed.gold.drawio
+rubric_overrides:
+  - "Кандидат должен дать latency budget конвейера"
+  - "Оценивается различие candidate generation и ranking"
+  - "Нужны безопасные model rollout/rollback"
+  - "Impression нельзя считать в момент генерации ответа"
+  - "Policy filtering важнее model score"

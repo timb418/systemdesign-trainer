@@ -1,0 +1,64 @@
+id: live-video-streaming
+title: Платформа прямых видеотрансляций
+difficulty: 5
+architecture_types:
+  - video
+  - distributed_cache
+  - queues
+duration_min: 60
+canvas: blank
+prompt_public: |
+  Спроектируйте глобальную платформу прямых видеотрансляций от авторов к массовой аудитории. Уточните ожидаемую задержку и поведение при сбоях.
+hidden:
+  functional:
+    - "Создавать трансляцию, аутентифицировать автора и принимать live ingest"
+    - "Транскодировать поток в adaptive bitrate ladder"
+    - "Доставлять live manifest и сегменты глобальным зрителям"
+    - "Поддерживать чат, счётчик зрителей и запись трансляции"
+    - "Переключать автора на резервный ingest endpoint без новой трансляции"
+  nonfunctional:
+    - "Задержка камера-экран p95 не более 5 секунд"
+    - "Воспроизведение доступно 99.99% времени активной трансляции"
+    - "Переключение ingest региона занимает не более 10 секунд"
+    - "Потеря отдельного transcoder не должна завершать трансляцию"
+    - "Чат может отставать на 2 секунды, видео и manifest не должны откатывать sequence"
+  scale:
+    - "100 тысяч одновременных активных трансляций; 10 тысяч из них записываются"
+    - "100 млн одновременных зрителей, крупнейший эфир — 20 млн"
+    - "Средний ingest 6 Мбит/с, viewer bitrate 3 Мбит/с"
+    - "Пик 5 млн chat messages в секунду"
+    - "Запись 10 тысяч эфиров при среднем 6 Мбит/с создаёт до 0.65 ПБ данных в сутки до применения retention"
+reveal_on_question:
+  - id: functional
+    keywords: ["функционал", "ingest", "автор", "транскод", "abr", "manifest", "чат", "запис", "резерв"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["latency", "задержк", "доступн", "sla", "переключ", "сбой", "transcoder", "sequence"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["qps", "нагрузк", "трансляц", "зрител", "одновремен", "битрейт", "чат", "петабайт"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Creator сначала вызывает Stream Control API, получает stream_id, короткоживущий publish token и два ближайших ingest endpoints. Edge Ingest принимает SRT или RTMP, проверяет token, измеряет состояние потока и реплицирует contribution feed в primary processing region; резервный endpoint поддерживает тот же stream epoch. Session Coordinator хранит stream state и выбирает только один активный source по fencing token, чтобы одновременное восстановление не создало раздвоенный эфир. Исходный поток кратко буферизуется в replicated media log, позволяя transcoders перечитать несколько секунд после падения. При 1 млн одновременных источников по 6 Мбит/с ingest составляет около 6 Тбит/с, поэтому processing распределён по регионам и admission учитывает transcoding capacity.
+
+    Бюджет p95 camera-to-screen в пять секунд распределён явно: capture/encoder и contribution ingest 0.8 с, replicated media-log buffer 0.5 с, transcode+packaging 1.2 с, origin/CDN 0.5 с, player startup buffer 1.5 с и 0.5 с запаса. Transcode workers формируют независимые bitrate renditions с синхронными keyframes. Packager создаёт CMAF chunks и монотонно нумерованные low-latency HLS manifests, публикуя их в regional origin shields. CDN раздаёт chunks зрителям; manifest имеет очень короткий TTL, chunks immutable и кэшируются дольше. Для крупнейшего эфира применяется pre-warm и multi-CDN steering по capacity, ISP и ошибкам. Playback API авторизует зрителя и выдаёт signed cookie, сохраняя общий кэш. Recorder асинхронно объединяет те же chunks в VOD manifest, поэтому запись не создаёт второй media pipeline.
+
+    Каждая rendition имеет standby worker или быстро поднимается из media log. Если профиль не готов, manifest временно исключает его, сохраняя playable stream. При потере processing region coordinator увеличивает epoch и переключает резерв, а packager не публикует sequence из старой эпохи. Player использует buffer и ABR, отправляет beacons end-to-end latency, stalls и rendition. Chat — отдельный WebSocket pipeline: gateway шардирует комнаты, durable log поддерживает moderation и fan-out tree для огромных эфиров; его отказ не влияет на видео. Approximate viewer count считается по heartbeat с HyperLogLog/оконной агрегацией.
+
+    Наблюдаемость включает ingest continuity, dropped frames, transcoder realtime factor, rendition health, manifest age, sequence gaps, CDN hit/egress, camera-to-screen latency, rebuffer ratio, failover duration и chat lag. Synthetic publishers и players непрерывно проверяют регионы. Алерты привязаны к stream impact: единичный профиль деградирует, остановка manifest или рост эпох требует немедленного переключения.
+  tradeoffs:
+    - "RTMP широко поддержан, SRT лучше переносит потери и даёт более надёжный contribution ingest."
+    - "Короткие CMAF chunks уменьшают latency, но повышают request rate и чувствительность к jitter."
+    - "Active-active transcoders ускоряют recovery, standby-on-failure дешевле для длинного хвоста малых эфиров."
+    - "Один CDN проще и дешевле, multi-CDN необходим для события на десятки миллионов зрителей, но усложняет steering."
+    - "Durable media log добавляет стоимость и секунды буфера, зато позволяет быстро восстановить transcoder без разрыва."
+    - "Точный viewer count дорог и нестабилен, оконная оценка достаточна для UI и capacity."
+  diagram: diagrams/live-video-streaming.gold.drawio
+rubric_overrides:
+  - "Кандидат должен провести бюджет end-to-end latency через ingest, transcode, packaging, CDN и player buffer."
+  - "Нужны stream epoch/fencing и монотонные media sequence при failover."
+  - "Оценивать деградацию отдельной rendition без остановки всего эфира."
+  - "Крупнейший эфир требует origin shielding, prewarm и обоснования multi-CDN."
+  - "Чат и счётчик зрителей должны быть отделены от критического media path."
+  - "Оценка ingest и записи должна арифметически согласовываться с числом одновременных потоков, bitrate и долей записываемых эфиров."

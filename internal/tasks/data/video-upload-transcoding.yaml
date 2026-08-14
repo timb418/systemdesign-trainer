@@ -1,0 +1,58 @@
+id: video-upload-transcoding
+title: Загрузка и транскодирование видео
+difficulty: 3
+architecture_types:
+  - video
+  - object_storage
+  - queues
+duration_min: 45
+canvas: blank
+prompt_public: |
+  Спроектируйте backend загрузки пользовательского видео и подготовки вариантов для просмотра на разных устройствах. Начните с контракта и потока данных.
+hidden:
+  functional:
+    - "Создавать upload session и принимать возобновляемую загрузку"
+    - "Проверять формат, длительность, вредоносный и запрещённый контент"
+    - "Транскодировать в несколько разрешений и битрейтов"
+    - "Генерировать manifest, thumbnails и публиковать готовность"
+    - "Показывать владельцу прогресс и позволять безопасный повтор"
+  nonfunctional:
+    - "API управления p99 не более 300 мс"
+    - "Видео длительностью 10 минут готово в течение 15 минут p95 после загрузки"
+    - "Подтверждённые исходники не теряются, durability не ниже 99.999999999%"
+    - "Повтор любого шага не создаёт противоречивые варианты"
+    - "Повреждённый или запрещённый файл не публикуется"
+  scale:
+    - "2 млн загрузок в сутки"
+    - "Средний исходник 500 МБ, около 1 ПБ входящих данных в сутки"
+    - "Пик 10 тысяч одновременных загрузок"
+    - "В среднем создаётся 5 вариантов общим размером 700 МБ"
+    - "До 100 тысяч параллельных задач транскодирования"
+reveal_on_question:
+  - id: functional
+    keywords: ["функционал", "загруз", "возобнов", "формат", "модерац", "транскод", "thumbnail", "прогресс"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["latency", "время", "доступн", "sla", "durability", "потер", "идемпот", "поврежд", "публикац"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["qps", "нагрузк", "загруз", "петабайт", "размер", "параллел", "вариант", "сутки"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Клиент создаёт POST /videos, получает video_id, multipart upload_id и подписанные URL для прямой передачи частей в object storage. Control API не проксирует гигабайты. Клиент загружает части параллельно, повторяет их по checksum и завершает session; Storage callback или Complete API сверяет список частей, размер и hash, после чего metadata state условно меняется с uploading на uploaded. Исходный объект immutable, versioned и реплицирован, поэтому подтверждение означает долговечное хранение.
+
+    Transactional outbox публикует workflow. Orchestrator строит DAG: probe формата, malware scan, извлечение кадров для moderation, затем независимые transcode jobs по профилям, thumbnails и packaging HLS/DASH. Каждая задача имеет ключ video_id+source_version+profile_version, пишет во временный префикс, проверяет результат и атомарно регистрирует artifact. Workers получают lease с heartbeat; после сбоя задача повторяется, а не продолжается из неизвестного состояния. CPU/GPU pools разделены по codec, priority и стоимости. Progress вычисляется по завершённым weighted stages и доступен через GET /videos/{id} или webhook.
+
+    Publish step выполняется только после обязательных проверок и минимального набора вариантов. Он создаёт versioned playback manifest, затем compare-and-swap переключает active_manifest и state в ready; частичные файлы никогда не видны зрителю. Неудачный дополнительный профиль можно достроить позже новой manifest version. Permanent decode error переводит видео в rejected, временные ошибки идут с backoff в retry, после лимита — DLQ для оператора. Autoscaling учитывает queue age и ожидаемые codec-minutes, а admission control ограничивает одного tenant. Метрики включают upload completion, checksum failures, stage latency, queue age, transcode realtime factor, GPU utilization, retry/DLQ, moderation rejects, cost per minute и publish lag. Трасса по video_id и аудит смены состояния позволяют расследовать зависшие или преждевременно опубликованные объекты.
+  tradeoffs:
+    - "Прямая загрузка в object storage разгружает backend, но требует signed URL, CORS и отдельного завершения session."
+    - "Один большой transcode job проще, DAG независимых профилей лучше параллелится и частично повторяется."
+    - "Публикация после всех вариантов полнее, минимальный playable set сокращает time-to-ready."
+    - "GPU быстрее новых кодеков, CPU дешевле и доступнее; маршрутизация зависит от профиля и очереди."
+    - "Удаление временных artifacts сразу экономит место, retention несколько дней облегчает диагностику и retry."
+  diagram: diagrams/video-upload-transcoding.gold.drawio
+rubric_overrides:
+  - "Кандидат должен вывести тяжёлый upload из control API через multipart signed URLs."
+  - "Оценивать идемпотентный DAG и атомарную публикацию только проверенного manifest."
+  - "Нужны backpressure и autoscaling по codec-minutes, а не только количеству задач."

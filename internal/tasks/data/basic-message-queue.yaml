@@ -1,0 +1,58 @@
+id: basic-message-queue
+title: Базовая очередь сообщений
+difficulty: 2
+architecture_types:
+  - queues
+  - key_value_store
+duration_min: 40
+canvas: blank
+prompt_public: |
+  Спроектируйте сервис очередей сообщений для внутренних приложений компании.
+  Продюсеры публикуют сообщения, а воркеры забирают их на обработку. Уточните требования и предложите архитектуру.
+hidden:
+  functional:
+    - "Создание очереди и публикация сообщения через API"
+    - "Получение сообщений конкурентными consumer-ами с подтверждением обработки"
+    - "Повторная доставка после истечения visibility timeout"
+    - "Dead-letter queue после исчерпания лимита попыток"
+    - "Удаление сообщения только после валидного ack"
+  nonfunctional:
+    - "Доставка at-least-once; consumer обязан быть идемпотентным"
+    - "p99 publish < 50 мс, receive < 100 мс в пределах региона"
+    - "Доступность API 99.95%"
+    - "Потеря подтверждённых сообщений недопустима при отказе одного узла"
+    - "Append order задаётся внутри partition; строгий порядок выдачи требует одного in-flight сообщения на message group"
+  scale:
+    - "2 000 очередей и до 100 активных consumer-ов на очередь"
+    - "Средняя нагрузка 40k сообщений/с, пик 120k сообщений/с"
+    - "Средний payload 2 КБ, максимум 256 КБ"
+    - "Retention 7 дней: около 50 ТБ payload до репликации и 150 ТБ при RF=3"
+    - "До 5 млн сообщений backlog в одной горячей очереди"
+reveal_on_question:
+  - id: functional
+    keywords: ["функционал", "ack", "подтвержден", "повтор", "visibility", "dead-letter", "удален"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["гаранти", "порядок", "latency", "задержк", "доступн", "потер", "sla"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["qps", "нагрузк", "размер", "retention", "очеред", "consumer", "backlog", "масштаб"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Внешний API предоставляет POST /queues/{queue}/messages и POST /queues/{queue}/receive, а подтверждение выполняется через DELETE /messages/{receipt}. Receipt содержит идентификатор доставки и fencing token, поэтому запоздалый ack от прежней попытки не удалит уже повторно выданное сообщение. Gateway проверяет квоты и направляет запрос по queue_id и hash(message_id) в partition leader. Метаданные очередей хранятся в небольшом strongly consistent каталоге, сами сообщения — в append-only сегментах на локальных дисках брокеров. Каждый partition имеет leader и две реплики; publish считается успешным после записи quorum, что переживает потерю одного узла.
+
+    Consumer делает long polling. Leader ведёт индекс доступных сообщений и таблицу in-flight с deadline visibility timeout. По таймеру неподтверждённая запись снова становится видимой, а после заданного числа receive атомарно переносится в DLQ. Семантика намеренно at-least-once: сетевой разрыв после обработки, но до ack неизбежно создаёт дубликат, поэтому message_id передаётся consumer-у для дедупликации. Partition log задаёт append order, но параллельные consumer-ы и redelivery не сохраняют порядок завершения. Если нужен строгий порядок выдачи, producer задаёт message_group_id, а broker держит не более одного in-flight сообщения группы и блокирует следующие до ack или terminal DLQ. Масштабирование достигается добавлением partition; горячую очередь можно repartition-ить через версионированную карту маршрутизации.
+
+    Retention реализован удалением закрытых сегментов после проверки реплик, а compaction индекса не блокирует publish. При падении leader каталог выбирает реплику с подтверждённым high watermark; клиенты повторяют запрос с idempotency key. Backpressure выражается лимитами in-flight, квотами и 429, чтобы медленные consumer-ы не исчерпали память. Наблюдаемость включает publish/receive p99, replication lag, depth и age старейшего сообщения по partition, долю redelivery, DLQ rate, ошибки quorum и consumer lag; трассировка связывает publish, delivery и ack по message_id.
+  tradeoffs:
+    - "At-least-once вместо exactly-once: простая устойчивость брокера ценой обязательной идемпотентности consumer-а."
+    - "Append-only лог вместо строки на сообщение: дешёвая последовательная запись, но сложнее удаление и индекс доступности."
+    - "Quorum ack вместо локального ack: выше долговечность, но publish зависит от задержки реплики."
+    - "Append order внутри partition не равен processing order; строгие message groups уменьшают параллелизм."
+    - "Long polling вместо push: проще контроль backpressure, но consumer управляет частотой запросов."
+  diagram: diagrams/basic-message-queue.gold.drawio
+rubric_overrides:
+  - "Кандидат явно объясняет race между visibility timeout, повторной выдачей и запоздалым ack."
+  - "Кандидат не обещает exactly-once и задаёт контракт идемпотентности consumer-а."
+  - "Схема показывает partition leader, реплики, DLQ и путь подтверждения."

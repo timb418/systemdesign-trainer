@@ -1,40 +1,61 @@
 <mxfile host="app.diagrams.net">
-  <diagram id="gold" name="Эталон">
-    <mxGraphModel dx="1000" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="700">
+  <diagram id="url-shortener-v1-gold" name="Эталон">
+    <mxGraphModel dx="1200" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="700">
       <root>
         <mxCell id="0"/>
         <mxCell id="1" parent="0"/>
-        <mxCell id="client" value="Клиент" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
-          <mxGeometry x="40" y="200" width="120" height="60" as="geometry"/>
+        <mxCell id="n0" value="Клиент" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="150" height="60" as="geometry"/>
         </mxCell>
-        <mxCell id="gw" value="API Gateway" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
-          <mxGeometry x="240" y="200" width="140" height="60" as="geometry"/>
+        <mxCell id="n1" value="Load Balancer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="260" y="60" width="150" height="60" as="geometry"/>
         </mxCell>
-        <mxCell id="svc" value="Shortener Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
-          <mxGeometry x="460" y="200" width="160" height="60" as="geometry"/>
+        <mxCell id="n2" value="Redirect/API Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="480" y="60" width="150" height="60" as="geometry"/>
         </mxCell>
-        <mxCell id="cache" value="Redis кэш" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
-          <mxGeometry x="480" y="40" width="120" height="80" as="geometry"/>
+        <mxCell id="n3" value="Redis Cache" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="700" y="60" width="150" height="60" as="geometry"/>
         </mxCell>
-        <mxCell id="db" value="Postgres" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
-          <mxGeometry x="700" y="190" width="120" height="80" as="geometry"/>
+        <mxCell id="n4" value="Postgres Primary" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="920" y="60" width="150" height="60" as="geometry"/>
         </mxCell>
-        <mxCell id="q" value="Очередь кликов" style="shape=process;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
-          <mxGeometry x="460" y="360" width="160" height="60" as="geometry"/>
+        <mxCell id="n5" value="Read Replica" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="240" width="150" height="60" as="geometry"/>
         </mxCell>
-        <mxCell id="e1" value="HTTPS" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="client" target="gw">
+        <mxCell id="n6" value="Click Queue" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="260" y="240" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n7" value="Stats Worker" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="480" y="240" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="e0" value="HTTPS create / redirect" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n0" target="n1">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e2" value="HTTP" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="gw" target="svc">
+        <mxCell id="e1" value="HTTP" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n1" target="n2">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e3" value="GET code" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="svc" target="cache">
+        <mxCell id="e2" value="GET/SET code" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n2" target="n3">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e4" value="code→url" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="svc" target="db">
+        <mxCell id="e3" value="INSERT link" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n2" target="n4">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e5" value="click event" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="svc" target="q">
+        <mxCell id="e4" value="lookup on miss" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n2" target="n5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" value="stream replication" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n4" target="n5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" value="click event async" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n2" target="n6">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" value="batch consume" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n6" target="n7">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8" value="read-after-write fallback" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n2" target="n4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e9" value="write-through active link" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n4" target="n3">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
       </root>

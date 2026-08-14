@@ -1,0 +1,81 @@
+id: rate-limiter-distributed
+title: Распределённый rate limiter
+difficulty: 2
+architecture_types:
+  - rate_limiter
+  - distributed_cache
+  - api_gateway
+duration_min: 45
+canvas: blank
+prompt_public: |
+  Спроектируйте общий rate limiter для множества экземпляров API в одном регионе. Лимит нельзя независимо умножать на число узлов.
+hidden:
+  functional:
+    - "Применять единый бюджет tenant+route на всех API-узлах"
+    - "Поддерживать token bucket и burst"
+    - "Возвращать remaining и Retry-After"
+    - "Горячо обновлять versioned policy"
+    - "Выделять аварийный лимит для критичных операций"
+  nonfunctional:
+    - "Проверка добавляет не более 3 мс p99"
+    - "Доступность решения 99.95%"
+    - "Перерасход при отказе не выше 5% минутного бюджета"
+    - "Policy применяется на всех узлах за 10 секунд"
+    - "Отказ limiter не должен полностью остановить health-critical API"
+  scale:
+    - "200k API RPS через 100 узлов"
+    - "5 млн активных ключей в час"
+    - "Один hot tenant создаёт 15k RPS"
+    - "Обычный лимит 1k RPS с burst 2k"
+    - "Policy store содержит 100k правил"
+reveal_on_question:
+  - id: functional
+    keywords: ["общий tenant budget", "token bucket", "Retry-After", "versioned policy", "emergency limit"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["decision p99", "overshoot budget", "policy propagation", "limiter outage", "fail open closed"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["API RPS", "число API узлов", "active limiter keys", "hot tenant", "policy count"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    Sidecar или библиотека вызывает regional limiter с key, cost, rule_version; результат содержит allowed, remaining и retry_after_ms.
+    Batch lease API выдаёт узлу небольшой пакет токенов для снижения сетевой нагрузки.
+    Модель данных.
+    Redis хранит tokens и last_refill на key, Lua script атомарно пополняет и списывает.
+    Policy service хранит immutable версии; локальный lease содержит granted, expires_at и epoch, не переживает смену политики.
+    Основные потоки.
+    API сначала тратит короткий lease, при низком остатке запрашивает новый.
+    Limiter выполняет atomic script в Redis cluster.
+    Policy события доходят и до limiter clients, и до regional limiter: новый epoch немедленно запрещает тратить старые leases; критичные маршруты имеют отдельный маленький emergency bucket.
+    Масштабирование.
+    Redis Cluster шардируется по нормализованному ключу; hot tenant можно разделять по subkey только если coordinator объединяет бюджет.
+    Lease размер адаптируется к скорости, но ограничивается 1–2 секундами допустимого перерасхода.
+    Согласованность.
+    Центральный скрипт линеаризует списание внутри shard.
+    Leases намеренно ослабляют точность: при падении узла токены теряются, при partition возможен bounded overshoot.
+    Epoch не позволяет старому lease работать после ужесточения policy.
+    Отказы и восстановление.
+    При timeout обычные write endpoints fail-closed, идемпотентные reads используют маленький local fallback, критичные операции — emergency policy.
+    Replica promotion проверяет Lua state; lease grant несёт request_id, который Lua хранит с TTL не меньше lease, поэтому retry не списывает пакет повторно.
+    Наблюдаемость.
+    Измеряются decision latency, Redis errors, lease utilization/waste, overshoot по audit sample, hot shards, policy propagation lag и fallback decisions.
+    Cardinality метрик ограничивается tenant tier и hashed exemplars.
+    Практические решения.
+    Точность задаётся как бюджет ошибки, а не обещание абсолютного глобального счётчика.
+    Load shedding начинается до Redis saturation.
+    Chaos-тест отключает shard и policy stream, проверяя разные fail-open/closed классы.
+  tradeoffs:
+    - "Запрос на каждый request против lease: точность против latency и Redis QPS"
+    - "Redis Lua против отдельного stateful сервиса: простота против контроля репликации"
+    - "Fail-open против fail-closed по классу API"
+    - "Маленький lease против потерь токенов и частых refill"
+    - "Cluster shard против hot tenant"
+  diagram: diagrams/rate-limiter-distributed.gold.drawio
+rubric_overrides:
+  - "Обязательно не умножать лимит на число API-узлов"
+  - "Кандидат должен количественно ограничить overshoot leases"
+  - "Оценивается выбор fail-open/closed по операциям"
+  - "Нужно объяснить атомарность Redis script и retry"

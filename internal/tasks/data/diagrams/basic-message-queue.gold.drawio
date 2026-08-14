@@ -1,0 +1,22 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон"><mxGraphModel dx="1200" dy="800" grid="1" gridSize="10"><root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="producer" value="Продюсеры" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="30" y="180" width="130" height="60" as="geometry"/></mxCell>
+    <mxCell id="gateway" value="Queue API + квоты" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1"><mxGeometry x="210" y="180" width="150" height="60" as="geometry"/></mxCell>
+    <mxCell id="catalog" value="Каталог очередей" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="220" y="40" width="130" height="70" as="geometry"/></mxCell>
+    <mxCell id="leader" value="Partition Leader&#xa;append log + in-flight&#xa;message-group gate" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" vertex="1" parent="1"><mxGeometry x="430" y="165" width="180" height="90" as="geometry"/></mxCell>
+    <mxCell id="replica" value="2 реплики&#xa;high watermark" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#e1d5e7;" vertex="1" parent="1"><mxGeometry x="680" y="50" width="150" height="80" as="geometry"/></mxCell>
+    <mxCell id="consumer" value="Consumer workers" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="900" y="180" width="150" height="60" as="geometry"/></mxCell>
+    <mxCell id="timer" value="Visibility timer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;" vertex="1" parent="1"><mxGeometry x="450" y="340" width="140" height="60" as="geometry"/></mxCell>
+    <mxCell id="dlq" value="Dead-letter queue" style="shape=process;whiteSpace=wrap;html=1;fillColor=#ffe6cc;" vertex="1" parent="1"><mxGeometry x="690" y="340" width="150" height="60" as="geometry"/></mxCell>
+    <mxCell id="e1" value="POST message + idempotency key" edge="1" parent="1" source="producer" target="gateway"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="route(queue, partition)" edge="1" parent="1" source="gateway" target="leader"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="metadata watch" edge="1" parent="1" source="catalog" target="gateway"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" value="quorum replication" edge="1" parent="1" source="leader" target="replica"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e5" value="long poll + receipt" edge="1" parent="1" source="consumer" target="leader"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e6" value="ACK(receipt, fencing token)" edge="1" parent="1" source="consumer" target="leader"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e7" value="lease deadline" edge="1" parent="1" source="leader" target="timer"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e8" value="redelivery" edge="1" parent="1" source="timer" target="leader"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e9" value="attempts exhausted" edge="1" parent="1" source="leader" target="dlq"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root></mxGraphModel></diagram>
+</mxfile>

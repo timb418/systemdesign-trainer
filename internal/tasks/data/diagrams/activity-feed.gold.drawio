@@ -1,0 +1,88 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="activity-feed-gold" name="Эталон">
+    <mxGraphModel dx="1200" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="700">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="n0" value="Product Services" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n1" value="Transactional Outbox" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="260" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n2" value="Event Log" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="480" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n3" value="Normalizer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="700" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n4" value="Timeline Store" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="920" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n5" value="Search Index" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="240" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n6" value="Activity API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="260" y="240" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n7" value="ACL Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="480" y="240" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n8" value="Quarantine" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="700" y="240" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n9" value="Immutable Audit Raw" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="920" y="240" width="160" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n10" value="Display Group Compactor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="260" y="420" width="180" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n11" value="Isolated Bulk Import Queue" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="520" y="420" width="190" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="e0" value="commit event" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n0" target="n1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" value="relay" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" value="versioned event" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n2" target="n3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" value="presentation event" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n3" target="n10">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" value="index filters" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n3" target="n5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" value="bad schema" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n3" target="n8">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" value="cursor read" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n6" target="n4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" value="filtered search" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n6" target="n5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8" value="authorize object" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n6" target="n7">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e9" value="append immutable canonical event" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n3" target="n9">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e10" value="group by verb/object/window" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n10" target="n4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e11" value="rebuild index" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n9" target="n5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e12" value="bulk events with separate quota" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n0" target="n11">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e13" value="rate-limited relay" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n11" target="n2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,22 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон"><mxGraphModel dx="1200" dy="800" grid="1"><root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="client" value="Клиент" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="20" y="190" width="120" height="60" as="geometry"/></mxCell>
+    <mxCell id="api" value="Workflow API&#xa;request dedupe" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1"><mxGeometry x="180" y="180" width="150" height="80" as="geometry"/></mxCell>
+    <mxCell id="state" value="Event Log + Snapshot&#xa;CAS version / outbox" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="400" y="50" width="170" height="90" as="geometry"/></mxCell>
+    <mxCell id="orchestrator" value="Оркестратор&#xa;state machine + fencing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" vertex="1" parent="1"><mxGeometry x="400" y="180" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="queue" value="Команды по workflow_id" style="shape=process;whiteSpace=wrap;html=1;fillColor=#ffe6cc;" vertex="1" parent="1"><mxGeometry x="640" y="190" width="170" height="60" as="geometry"/></mxCell>
+    <mxCell id="worker" value="Worker&#xa;Inbox + local Outbox" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="880" y="180" width="160" height="80" as="geometry"/></mxCell>
+    <mxCell id="provider" value="Провайдер&#xa;idempotency key" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;" vertex="1" parent="1"><mxGeometry x="880" y="40" width="160" height="80" as="geometry"/></mxCell>
+    <mxCell id="reconcile" value="Watchdog / Reconciliation / Compensation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;" vertex="1" parent="1"><mxGeometry x="620" y="360" width="230" height="70" as="geometry"/></mxCell>
+    <mxCell id="e1" value="POST + client_request_id" edge="1" parent="1" source="client" target="api"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="create workflow transaction" edge="1" parent="1" source="api" target="state"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="events + expected version" edge="1" parent="1" source="state" target="orchestrator"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" value="outbox command_id" edge="1" parent="1" source="orchestrator" target="queue"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e5" value="at-least-once command" edge="1" parent="1" source="queue" target="worker"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e6" value="stable provider key" edge="1" parent="1" source="worker" target="provider"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e7" value="deduplicated result event" edge="1" parent="1" source="worker" target="state"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e8" value="ambiguous / stale workflow" edge="1" parent="1" source="state" target="reconcile"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e9" value="status query / compensation" edge="1" parent="1" source="reconcile" target="provider"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root></mxGraphModel></diagram>
+</mxfile>

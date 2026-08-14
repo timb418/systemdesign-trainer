@@ -1,0 +1,73 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон">
+    <mxGraphModel dx="1200" dy="760" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="client" value="Веб-клиент" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="260" width="130" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="gateway" value="API Gateway" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="230" y="260" width="140" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="auth" value="Session Auth Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="450" y="240" width="170" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="redis" value="Redis: сессии и TTL" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="720" y="80" width="160" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="redisreplica" value="Redis Replica / Failover" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="970" y="80" width="170" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="users" value="PostgreSQL: аккаунты" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="720" y="240" width="160" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="limiter" value="Rate Limiter" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="460" y="80" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="queue" value="Очередь аудита" style="shape=process;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="710" y="410" width="170" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="audit" value="Неизменяемый журнал" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="970" y="400" width="170" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="app" value="Прикладной сервис" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="460" y="430" width="160" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" value="POST /sessions + пароль" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="client" target="gateway">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" value="mTLS: вход / проверка" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="gateway" target="auth">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" value="лимит IP + account" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="auth" target="limiter">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" value="чтение Argon2id-хеша" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="auth" target="users">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" value="SET token + TTL / GET" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="auth" target="redis">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" value="Secure HttpOnly cookie" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="gateway" target="client">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" value="user_id + claims" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="gateway" target="app">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8" value="login / revoke event" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="auth" target="queue">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e9" value="асинхронная запись" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="queue" target="audit">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e10" value="WAIT replica before login success" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="redis" target="redisreplica">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e11" value="Origin + CSRF check" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="gateway" target="auth">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

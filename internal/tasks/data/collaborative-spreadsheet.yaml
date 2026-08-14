@@ -1,0 +1,61 @@
+id: collaborative-spreadsheet
+title: Совместная электронная таблица
+difficulty: 4
+architecture_types:
+  - collab_editing
+  - key_value_store
+duration_min: 70
+canvas: blank
+prompt_public: |
+  На доске показан сервис совместного редактирования ячеек. Добавьте формулы, зависимости и работу многих пользователей.
+  Уточните семантику конфликтов и предложите эволюцию исходной архитектуры.
+hidden:
+  functional:
+    - "Совместное изменение значений, формул, строк и столбцов"
+    - "Пересчёт зависимых формул и отображение вычисленных результатов"
+    - "Presence, выделения и комментарии пользователей"
+    - "Офлайн-изменения и восстановление после reconnect"
+    - "История версий и откат документа к выбранной ревизии"
+  nonfunctional:
+    - "p95 подтверждения правки < 200 мс, локальный optimistic update мгновенный"
+    - "Все клиенты сходятся к одинаковой структуре и значениям"
+    - "Формула пересчитывается по согласованной ревизии входных ячеек"
+    - "Подтверждённые правки переживают отказ зоны; доступность 99.95%"
+    - "Ошибочная или циклическая формула не блокирует пересчёт остальных ячеек"
+  scale:
+    - "10 млн DAU и 500k одновременно открытых документов"
+    - "До 1 000 активных редакторов одного документа"
+    - "До 10 млн ячеек и 2 млн формул в книге"
+    - "Пик 400k edit operations/с и 20 млн вычислений ячеек/с"
+    - "История 180 дней, snapshot типичной книги 20 МБ"
+reveal_on_question:
+  - id: functional
+    keywords: ["ячейк", "формул", "строк", "столб", "коммент", "offline", "истори", "откат"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["latency", "сходим", "консист", "ревизи", "цикл", "доступн", "потер", "гаранти"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["dau", "онлайн", "сколько", "ячейк", "формул", "qps", "вычислен", "размер", "retention"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Клиент получает snapshot книги и открывает WebSocket. Edit API передаёт workbook_id, op_id, actor_id, base_revision и структурированную команду: SetCell, InsertRow, DeleteColumn. Адреса ячеек внутри модели используют стабильные row_id/column_id, а A1 — только представление; иначе конкурентная вставка строк разрушит ссылки. Session service сериализует операции одного workbook в revision log, реплицированный между зонами. Для офлайн-merge структурные последовательности используют CRDT-позиции. SetCell не доверяет client wall clock и не делает delayed-arrival LWW: если base_revision не содержит текущую версию ячейки, сервер детерминированно сохраняет обе competing edit values, выбирает displayed winner по commit revision/op_id и возвращает conflict marker для явного resolve. Формула и literal — один тип конфликтующего содержимого; ResolveCellConflict ссылается на все observed op_id, поэтому повтор детерминирован. Сервер проверяет ACL и дедуплицирует op_id.
+
+    После commit изменение попадает через outbox в calculation service. Dependency graph хранит прямые и обратные рёбра по formula cell и version. Parser нормализует формулу, обнаруживает цикл, затем scheduler строит затронутый DAG. Workers считают независимые уровни параллельно на immutable snapshot входных значений конкретной revision. Результат CellValue(cell_id, revision, value, error) записывается условно: поздний расчёт старой ревизии не перезаписывает новый. Клиент видит pending revision и затем поток вычисленных delta. Волатильные функции, внешние данные и время имеют явную семантику и кэш, чтобы replay оставался объяснимым.
+
+    Книга делится на chunks по диапазонам row_id; metadata и журнал шардируются по workbook_id, а graph/value storage — по workbook_id плюс chunk. Горячая книга сохраняет единый log order, но вычисления fan-out-ятся. Snapshotter сворачивает операции, а старые сегменты архивируются. Rollback не переписывает журнал: RestoreRevision(target_revision) читает исторический snapshot плюс tail, вычисляет обратимый patch текущей книги к выбранному состоянию и commits его как новую revision с actor/reason. Эта revision проходит обычный dependency rebuild/recalculation; concurrent edits после base rollback либо вызывают conflict markers, либо требуют повторного подтверждения. При failover новый leader продолжает с committed revision; клиент resend-ит неподтверждённые op_id. Poison formula изолируется timeout-ом и бюджетом вычислений. Метрики: edit ack, revision lag, cell conflicts/resolution age, rollback conflicts, recalculation fan-out и critical-path latency, stale-result drops, cycle rate, hot workbook, reconnect gaps и snapshot lag. Distributed trace связывает edit revision с каждым вычисленным диапазоном.
+  tradeoffs:
+    - "Стабильные row/column ID усложняют модель, но сохраняют ссылки при конкурентных структурных правках."
+    - "Сериализация операций книги упрощает ревизии, но горячий документ имеет предел writer-а."
+    - "Асинхронный пересчёт снижает edit latency, но пользователь временно видит pending/stale значение."
+    - "Инкрементальный dependency graph экономит вычисления, но дорог при массовой смене диапазонов."
+    - "Явный cell conflict сохраняет offline intent лучше arrival-time LWW, но требует UX разрешения и дополнительного состояния."
+  diagram: diagrams/collaborative-spreadsheet.gold.drawio
+rubric_overrides:
+  - "Кандидат замечает, что адрес A1 непригоден как стабильный идентификатор при вставках."
+  - "Вычисленные значения привязаны к revision и защищены от поздней записи."
+  - "Решение различает журнал редактирования, dependency graph и пул вычислений."
+  - "Кандидат объясняет цикл, volatile-функции и перегруженную формулу."
+  - "Указаны недостатки стартовой схемы при масштабном fan-out пересчёта."
+  - "Rollback создаёт новую ревизию и повторный расчёт, не переписывая историю."

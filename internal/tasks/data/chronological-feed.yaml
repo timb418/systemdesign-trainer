@@ -1,0 +1,83 @@
+id: chronological-feed
+title: Хронологическая лента
+difficulty: 2
+architecture_types:
+  - feed
+  - queues
+duration_min: 40
+canvas: blank
+prompt_public: |
+  Спроектируйте домашнюю ленту, где публикации подписок показываются строго в обратном хронологическом порядке.
+hidden:
+  functional:
+    - "Публиковать пост и читать домашнюю ленту"
+    - "Подписываться и отписываться от автора"
+    - "Листать стабильным cursor pagination без дублей"
+    - "Скрывать удалённые и заблокированные посты"
+    - "Показывать новые посты без полного refresh"
+  nonfunctional:
+    - "p99 первой страницы менее 200 мс"
+    - "Доступность чтения 99.95%"
+    - "Новый пост виден подписчику за 5 секунд"
+    - "Порядок детерминирован при одинаковом timestamp"
+    - "Удаление исчезает из выдачи за 30 секунд"
+    - "Пагинация возвращает все доступные посты snapshot без пропусков и дублей в пределах 30-дневной retention ленты"
+  scale:
+    - "20 млн DAU"
+    - "120 млн постов в сутки"
+    - "Средний пользователь читает 200 авторов"
+    - "Пик чтения 120k QPS, записи 15k QPS"
+    - "Страница содержит 30 постов"
+reveal_on_question:
+  - id: functional
+    keywords: ["publish post", "home timeline", "follow unfollow", "cursor pagination", "delete post"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["feed p99", "fresh post delay", "stable order", "delete propagation", "pagination completeness"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["feed DAU", "posts per day", "followed authors", "read QPS", "write QPS"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    POST /posts создаёт immutable post_id, GET /feed?cursor возвращает items и next_cursor, follow API меняет graph.
+    Cursor кодирует last_created_at и post_id, а не offset.
+    Модель данных.
+    Posts партиционированы по author_id и времени; post и PostCreated outbox фиксируются одной транзакцией, follow graph хранит adjacency.
+    Feed item ссылается на post_id, author_id, rank_time; inbox хранит applied fanout watermark, а tombstone и block version проверяются при materialization.
+    Основные потоки.
+    Outbox relay публикует PostCreated; для обычных авторов fan-out-on-write читает follower adjacency и идемпотентно кладёт ID в inbox подписчиков.
+    Reader фиксирует snapshot watermark, читает inbox buckets до retention boundary и обязательно merge-ит author outboxes для интервала между applied fanout watermark и snapshot; затем фильтрует tombstones/block versions и гидратирует posts batch-запросом.
+    Follow запускает ограниченный backfill последних публикаций.
+    Масштабирование.
+    Очередь fanout шардируется по author_id, inbox — по user_id и time bucket.
+    Celebrity threshold переводит автора на read-time merge, хотя полная celebrity-задача вне базовой карточки.
+    Cache хранит первую страницу.
+    Согласованность.
+    Порядок задаётся парой created_at server time и sortable post_id.
+    Fanout eventual consistent до пяти секунд; read-your-write автору обеспечивается merge собственного outbox.
+    Unfollow применяет graph version при чтении.
+    Отказы и восстановление.
+    При lag fanout reader закрывает неполный интервал pull-merge из author outboxes; cursor не продвигается за интервал, пока его полнота не доказана inbox watermark или результатом merge.
+    Повторный event идемпотентен по user_id/post_id.
+    Удаление идёт приоритетной tombstone очередью; при cache outage чтение деградирует к inbox store.
+    Наблюдаемость.
+    Метрики: feed p99, fanout lag, inbox write amplification, duplicate suppression, hydration misses, stale deleted items и cursor errors.
+    Synthetic user публикует, читает и удаляет пост по SLO.
+    Практические решения.
+    Хранятся ID, не копии контента, чтобы редактирование и модерация были едины.
+    Inbox хранит 30 дней; cursor несёт watermark, последнюю пару rank_time/post_id и позиции pull-источников, поэтому продолжение остаётся полным при backfill и hybrid merge.
+    Backfill не должен вытеснять свежие события.
+  tradeoffs:
+    - "Fan-out-on-write против merge-on-read: быстрые чтения против write amplification"
+    - "Offset против cursor: простота против стабильности"
+    - "Копии поста против ссылок на post_id"
+    - "Строгая моментальная выдача против пятисекундной eventual consistency"
+  diagram: diagrams/chronological-feed.gold.drawio
+rubric_overrides:
+  - "Кандидат должен сохранить строгий хронологический порядок"
+  - "Оценивается стабильная cursor pagination"
+  - "Нужно разобрать delete/unfollow race"
+  - "Fanout должен быть идемпотентным"
+  - "Cursor обязан сохранять snapshot и позиции всех источников без пропусков"

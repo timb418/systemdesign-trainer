@@ -1,0 +1,64 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="file-upload-service-gold" name="Эталон">
+    <mxGraphModel dx="1200" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="700">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="n0" value="Web Client" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n1" value="Upload Control API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="260" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n2" value="Quarantine Bucket" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="480" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n3" value="Multipart Composer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="700" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n4" value="Checksum Worker" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="920" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n5" value="Malware Scanner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="240" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n6" value="Metadata DB" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="260" y="240" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n7" value="Ready Bucket" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="480" y="240" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n8" value="Cleanup Reconciler" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="700" y="240" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="e0" value="create / complete" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n0" target="n1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" value="presigned part URLs" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n1" target="n0">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" value="PUT parts" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n0" target="n2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" value="compose job" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n1" target="n3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" value="whole object" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n3" target="n4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" value="verified object" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n4" target="n5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" value="promote version" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n5" target="n7">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" value="publish ready" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n5" target="n6">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8" value="abort expired" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n8" target="n2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

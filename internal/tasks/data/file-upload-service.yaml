@@ -1,0 +1,81 @@
+id: file-upload-service
+title: Сервис загрузки файлов
+difficulty: 2
+architecture_types:
+  - object_storage
+  - queues
+duration_min: 40
+canvas: blank
+prompt_public: |
+  Спроектируйте надёжную загрузку больших файлов для веб-приложения с паузой, возобновлением и проверкой безопасности.
+hidden:
+  functional:
+    - "Создавать resumable upload session"
+    - "Загружать части напрямую в storage"
+    - "Возобновлять после обрыва и завершать идемпотентно"
+    - "Проверять checksum и антивирус"
+    - "Показывать статус обработки владельцу"
+  nonfunctional:
+    - "API p99 менее 150 мс без учёта передачи байтов"
+    - "Поддерживаются файлы до 20 ГБ"
+    - "Повреждённый файл никогда не становится downloadable"
+    - "Незавершённые части удаляются за 24 часа"
+    - "Доступность upload control plane 99.95%"
+  scale:
+    - "5 млн загрузок в сутки"
+    - "Средний файл 40 МБ"
+    - "Пик ingress 200 Гбит/с"
+    - "Размер part 8–64 МБ, максимум 10k частей"
+    - "До 2% сессий никогда не завершаются"
+reveal_on_question:
+  - id: functional
+    keywords: ["resumable upload", "multipart", "presigned part", "complete upload", "checksum", "antivirus", "processing status"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["control api p99", "maximum file", "corrupt download", "abandoned parts", "control plane availability"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["uploads per day", "average file", "ingress bandwidth", "part size", "multipart count", "abandoned sessions"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    POST /uploads создаёт session, PUT part использует короткоживущий presigned URL, Complete принимает ordered part checksums и idempotency key.
+    Status показывает pending_scan, ready или rejected.
+    Модель данных.
+    Session хранит owner, object key, expected size/hash, part manifest, expiry и state machine.
+    Final object metadata отделён от quarantine blob; переход ready разрешён только scanner result соответствующей version.
+    Основные потоки.
+    Клиент параллельно грузит parts в quarantine bucket.
+    Complete проверяет manifest и запускает multipart compose; checksum worker валидирует целое, scanner проверяет, затем metadata атомарно публикует ready.
+    Масштабирование.
+    Data plane идёт напрямую в object storage, control API stateless.
+    Part size адаптируется к размеру; очереди checksum/scan разделены по весу.
+    Большие tenants имеют bandwidth quotas.
+    Согласованность.
+    Complete идемпотентен по session version.
+    Metadata ready записывается после durable object и scan; событие может повторяться.
+    Read-after-ready требует тот же object version, чтобы overwrite не подменил проверенный blob.
+    Отказы и восстановление.
+    Expired sessions lifecycle удаляет parts, reconciliation сравнивает sessions и multipart uploads.
+    Scanner timeout оставляет quarantine, не fail-open.
+    Неудачный compose повторяется, а checksum mismatch закрывает session.
+    Наблюдаемость.
+    Измеряются create/complete latency, bytes ingress, abandoned sessions, part retries, compose/scan lag, checksum mismatches, orphan parts и ready publication failures.
+    Trace связан upload_id.
+    Практические решения.
+    Presigned URL ограничивает key, part, size и срок.
+    Filename не используется как storage key.
+    Клиент может получить новый URL без новой session; download endpoint никогда не читает quarantine bucket.
+  tradeoffs:
+    - "Proxy upload против direct presigned upload"
+    - "Малые parts против overhead manifest"
+    - "Client checksum против server checksum"
+    - "Синхронный scan против async quarantine"
+    - "Mutable key против immutable object version"
+  diagram: diagrams/file-upload-service.gold.drawio
+rubric_overrides:
+  - "Оценивается state machine pending→quarantine→ready"
+  - "Complete и повтор parts должны быть идемпотентны"
+  - "Нужна очистка abandoned multipart uploads"
+  - "Проверенный version нельзя подменить"

@@ -1,0 +1,97 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон">
+    <mxGraphModel dx="1450" dy="850" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" fold="1" page="1" pageScale="1" pageWidth="1450" pageHeight="900">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="clients" value="Глобальные клиенты" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="30" y="300" width="160" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge" value="Anycast Edge + WAF" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="240" y="290" width="170" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="eugw" value="EU Gateway Pool" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="500" y="100" width="180" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="usgw" value="US Gateway Pool" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="500" y="450" width="180" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="eube" value="EU Backend Clusters" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="790" y="90" width="180" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="usbe" value="US Backend Clusters" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="790" y="440" width="180" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="quota" value="Quota Coordinator" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="510" y="650" width="180" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="control" value="Global Control Plane" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="790" y="650" width="190" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="journal" value="Config Journal" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="640" width="160" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="bus" value="Региональные config streams" style="shape=process;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="1050" y="320" width="200" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="health" value="Global Health + Failover" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="100" width="200" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="eutelemetry" value="EU-only Logs / Traces" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="430" width="180" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="ustelemetry" value="US Logs / Traces" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="430" width="170" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" value="HTTPS to nearest PoP" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="clients" target="edge">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" value="EU residency route" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="edge" target="eugw">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" value="nearest allowed region" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="edge" target="usgw">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" value="mTLS + stable canary route" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="eugw" target="eube">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" value="mTLS + stable canary route" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="usgw" target="usbe">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" value="EU quota lease" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="quota" target="eugw">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" value="US quota lease" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="quota" target="usgw">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8" value="append signed revision" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="control" target="journal">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e9" value="ordered deltas" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="journal" target="bus">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e10" value="atomic EU snapshot" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="bus" target="eugw">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e11" value="atomic US snapshot" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="bus" target="usgw">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e12" value="synthetic + error signals" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="eube" target="health">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e13" value="regional health state" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="health" target="edge">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e14" value="EU residency-safe logs" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="eugw" target="eutelemetry">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e15" value="US metrics + traces" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="usgw" target="ustelemetry">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e16" value="synthetic + error signals" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="usbe" target="health">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

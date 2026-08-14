@@ -1,0 +1,84 @@
+id: backup-service
+title: Сервис резервного копирования
+difficulty: 2
+architecture_types:
+  - object_storage
+  - key_value_store
+  - queues
+duration_min: 45
+canvas: blank
+prompt_public: |
+  Спроектируйте сервис резервного копирования серверов: инкременты, дедупликация, retention и проверяемое восстановление.
+hidden:
+  functional:
+    - "Создавать full и incremental backup"
+    - "Дедуплицировать блоки внутри tenant"
+    - "Восстанавливать выбранный snapshot"
+    - "Применять retention и immutable lock"
+    - "Регулярно проверять восстанавливаемость"
+  nonfunctional:
+    - "RPO 1 час"
+    - "RTO восстановления 2 ТБ менее 4 часов"
+    - "Долговечность блоков 11 девяток"
+    - "Backup не использует более 20% дискового I/O клиента"
+    - "Удаление tenant завершается за 30 дней"
+  scale:
+    - "100k защищаемых серверов"
+    - "В сутки поступает 5 ПБ логических данных"
+    - "После дедупликации хранится 600 ТБ/сутки"
+    - "Средний snapshot содержит 2 млн chunk references"
+    - "Retention: 30 daily, 12 monthly snapshots"
+reveal_on_question:
+  - id: functional
+    keywords: ["full backup", "incremental", "dedup", "restore snapshot", "retention", "immutable lock", "restore verification"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["rpo", "rto", "durability", "client disk io", "tenant deletion", "recoverability"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["protected servers", "logical petabytes", "dedup bytes", "chunk references", "daily monthly retention"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    Agent получает backup plan, загружает content-addressed chunks и атомарно commits manifest.
+    Restore API выбирает snapshot и destination; verify job восстанавливает sampled files в sandbox.
+    Модель данных.
+    Chunk key — tenant-scoped hash, metadata хранит size, encryption key version и refcount intent.
+    Immutable manifest содержит ordered file extents и parent snapshot.
+    Retention создаёт delete intent, не меняет manifest.
+    Основные потоки.
+    Agent делает changed-block scan, шифрует и загружает отсутствующие chunks, затем commit manifest через transaction/outbox.
+    Catalog публикует snapshot только после проверки ссылок.
+    Garbage collector удаляет unreachable chunks после grace period.
+    Масштабирование.
+    Chunk store масштабируется по hash, catalog — tenant/snapshot.
+    Bloom inventory уменьшает existence checks, но false positive исправляется server verification перед commit.
+    Restore workers параллелят chunks с bandwidth limits.
+    Согласованность.
+    Manifest commit строгий и идемпотентный.
+    Refcount не является единственным источником истины: mark-and-sweep по manifests защищает от гонок.
+    Immutable lock запрещает GC до срока и legal hold.
+    Отказы и восстановление.
+    Обрыв upload оставляет chunks, которые GC удалит после grace.
+    Corrupt chunk обнаруживается scrub checksum и чинится с replica.
+    Частичный restore повторяем; ransomware не может удалить locked snapshots обычными credentials.
+    Наблюдаемость.
+    Метрики backup lag/RPO, logical/physical bytes, dedup ratio, manifest commit failures, orphan age, scrub corruption, restore throughput и verify success.
+    Алерт строится по серверам без успешного recovery point.
+    Практические решения.
+    Ключи tenant ограничивают утечку dedup side-channel, поэтому глобальная дедупликация не используется.
+    Ежемесячный restore drill важнее формального successful upload.
+    Catalog backup хранится отдельно.
+  tradeoffs:
+    - "Fixed chunks против content-defined: простота против dedup после вставок"
+    - "Глобальная против tenant дедупликации"
+    - "Refcount против mark-and-sweep"
+    - "Частые full manifests против цепочки инкрементов"
+    - "Immutable retention против быстрого освобождения места"
+  diagram: diagrams/backup-service.gold.drawio
+rubric_overrides:
+  - "Оценивается атомарная публикация manifest"
+  - "Нужен безопасный GC при orphan chunks и гонках"
+  - "RPO/RTO должны быть обеспечены архитектурой"
+  - "Успешный backup недостаточен без restore verification"

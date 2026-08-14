@@ -1,0 +1,17 @@
+<mxfile host="app.diagrams.net"><diagram id="gold" name="Эталон"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="user" value="Employee App" vertex="1" parent="1"><mxGeometry x="20" y="220" width="130" height="60" as="geometry"/></mxCell>
+<mxCell id="api" value="Booking API" vertex="1" parent="1"><mxGeometry x="200" y="220" width="130" height="60" as="geometry"/></mxCell>
+<mxCell id="search" value="Availability Projection" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="390" y="70" width="160" height="80" as="geometry"/></mxCell>
+<mxCell id="svc" value="Booking Service" vertex="1" parent="1"><mxGeometry x="400" y="220" width="150" height="60" as="geometry"/></mxCell>
+<mxCell id="db" value="Postgres: Active-Only Range Constraint + Outbox (One TX)" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="620" y="200" width="260" height="100" as="geometry"/></mxCell>
+<mxCell id="relay" value="Outbox Relay" style="shape=process" vertex="1" parent="1"><mxGeometry x="680" y="390" width="140" height="60" as="geometry"/></mxCell>
+<mxCell id="notify" value="Notification Workers" vertex="1" parent="1"><mxGeometry x="900" y="390" width="170" height="60" as="geometry"/></mxCell>
+<mxCell id="e1" value="search/create" edge="1" parent="1" source="user" target="api"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e2" value="candidate rooms" edge="1" parent="1" source="api" target="search"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e3" value="idempotent command" edge="1" parent="1" source="api" target="svc"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e4" value="booking + outbox atomic commit" edge="1" parent="1" source="svc" target="db"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e5" value="poll committed outbox" edge="1" parent="1" source="db" target="relay"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e6" value="update projection" edge="1" parent="1" source="relay" target="search"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e7" value="at-least-once booking_version" edge="1" parent="1" source="relay" target="notify"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram></mxfile>

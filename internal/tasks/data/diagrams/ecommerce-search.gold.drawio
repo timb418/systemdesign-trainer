@@ -1,0 +1,23 @@
+<mxfile host="app.diagrams.net"><diagram id="ecommerce-search" name="Эталон"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="c" value="Покупатель" vertex="1" parent="1"><mxGeometry x="20" y="100" width="100" height="50" as="geometry"/></mxCell>
+<mxCell id="q" value="Search Orchestrator" vertex="1" parent="1"><mxGeometry x="160" y="100" width="140" height="50" as="geometry"/></mxCell>
+<mxCell id="idx" value="Search Shards" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="350" y="80" width="120" height="60" as="geometry"/></mxCell>
+<mxCell id="rank" value="Ranking Service" vertex="1" parent="1"><mxGeometry x="520" y="80" width="120" height="50" as="geometry"/></mxCell>
+<mxCell id="inv" value="Inventory Service" vertex="1" parent="1"><mxGeometry x="520" y="170" width="120" height="50" as="geometry"/></mxCell>
+<mxCell id="cdc" value="Catalog CDC Log" style="shape=process" vertex="1" parent="1"><mxGeometry x="150" y="250" width="130" height="60" as="geometry"/></mxCell>
+<mxCell id="ix" value="Document Indexer" vertex="1" parent="1"><mxGeometry x="350" y="250" width="130" height="50" as="geometry"/></mxCell>
+<mxCell id="deny" value="Urgent Delist Deny Cache" vertex="1" parent="1"><mxGeometry x="690" y="170" width="150" height="50" as="geometry"/></mxCell>
+<mxCell id="reindex" value="Snapshot Reindex + Alias" vertex="1" parent="1"><mxGeometry x="520" y="250" width="160" height="50" as="geometry"/></mxCell>
+<mxCell id="e1" value="query filters" edge="1" parent="1" source="c" target="q"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e2" value="scatter search" edge="1" parent="1" source="q" target="idx"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e3" value="top candidates" edge="1" parent="1" source="idx" target="rank"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e4" value="reranked products" edge="1" parent="1" source="rank" target="q"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e5" value="batch stock check" edge="1" parent="1" source="q" target="inv"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e6" value="product changes" edge="1" parent="1" source="cdc" target="ix"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e7" value="versioned upsert" edge="1" parent="1" source="ix" target="idx"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e8" value="priority delist" edge="1" parent="1" source="cdc" target="deny"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e9" value="filter top-N" edge="1" parent="1" source="deny" target="q"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e10" value="snapshot + CDC catch-up" edge="1" parent="1" source="cdc" target="reindex"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e11" value="atomic alias switch" edge="1" parent="1" source="reindex" target="idx"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram></mxfile>

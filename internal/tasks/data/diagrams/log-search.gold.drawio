@@ -1,0 +1,24 @@
+<mxfile host="app.diagrams.net"><diagram id="log-search" name="Эталон"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="agent" value="Log Agents + Disk Spool" vertex="1" parent="1"><mxGeometry x="20" y="80" width="140" height="50" as="geometry"/></mxCell>
+<mxCell id="ing" value="Ingest Gateway" vertex="1" parent="1"><mxGeometry x="200" y="80" width="120" height="50" as="geometry"/></mxCell>
+<mxCell id="log" value="Replicated Log (24h+)" style="shape=process" vertex="1" parent="1"><mxGeometry x="370" y="70" width="150" height="60" as="geometry"/></mxCell>
+<mxCell id="raw" value="Independent Raw Sink" vertex="1" parent="1"><mxGeometry x="570" y="150" width="140" height="50" as="geometry"/></mxCell>
+<mxCell id="ix" value="Segment Indexers" vertex="1" parent="1"><mxGeometry x="570" y="50" width="120" height="50" as="geometry"/></mxCell>
+<mxCell id="hot" value="Versioned Hot Segments" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="760" y="30" width="160" height="60" as="geometry"/></mxCell>
+<mxCell id="obj" value="Archive Object Store" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="760" y="150" width="150" height="60" as="geometry"/></mxCell>
+<mxCell id="manifest" value="PIT Manifest Registry" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="970" y="30" width="150" height="60" as="geometry"/></mxCell>
+<mxCell id="query" value="RBAC Query Coordinator" vertex="1" parent="1"><mxGeometry x="570" y="260" width="170" height="50" as="geometry"/></mxCell>
+<mxCell id="user" value="Инженер" vertex="1" parent="1"><mxGeometry x="390" y="260" width="100" height="50" as="geometry"/></mxCell>
+<mxCell id="e1" value="compressed batches" edge="1" parent="1" source="agent" target="ing"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e2" value="ack after replicated append" edge="1" parent="1" source="ing" target="log"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e3" value="offsets" edge="1" parent="1" source="log" target="ix"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e4" value="independent raw copy" edge="1" parent="1" source="log" target="raw"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e5" value="compressed raw" edge="1" parent="1" source="raw" target="obj"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e6" value="immutable segments" edge="1" parent="1" source="ix" target="hot"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e7" value="publish/retain generation" edge="1" parent="1" source="hot" target="manifest"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e8" value="search + page token" edge="1" parent="1" source="user" target="query"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e9" value="pin PIT generation" edge="1" parent="1" source="query" target="manifest"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e10" value="hot time shards" edge="1" parent="1" source="query" target="hot"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e11" value="quota archive scan" edge="1" parent="1" source="query" target="obj"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram></mxfile>

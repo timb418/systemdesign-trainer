@@ -1,0 +1,67 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="rate-limiter-adaptive-gold" name="Эталон">
+    <mxGraphModel dx="1200" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="700">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="n0" value="API Gateway" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n1" value="Local Enforcer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="260" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n2" value="Backend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="480" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n3" value="Telemetry Collector" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="700" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n4" value="Adaptive Controller" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="920" y="60" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n5" value="Policy Stream" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="240" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n6" value="Operator Override" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="260" y="240" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n7" value="Shadow Evaluator" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="480" y="240" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n8" value="Tier Allocator / Premium Reserve" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="700" y="240" width="210" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="e0" value="check tokens" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n0" target="n1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" value="allowed traffic" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" value="latency/errors/queue" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n2" target="n3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" value="30s signals" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n3" target="n4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" value="safe capacity + reason" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n4" target="n8">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" value="effective rate" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n5" target="n1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" value="TTL override" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n6" target="n4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" value="candidate policy" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n4" target="n7">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8" value="tier rates + protected reserve + epoch" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n8" target="n5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e9" value="observed outcome" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="n3" target="n7">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

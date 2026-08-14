@@ -1,0 +1,60 @@
+id: vod-streaming-platform
+title: Платформа потокового видео по запросу
+difficulty: 4
+architecture_types:
+  - video
+  - object_storage
+  - distributed_cache
+duration_min: 55
+canvas: blank
+prompt_public: |
+  Спроектируйте платформу просмотра заранее подготовленного видео по запросу для глобальной аудитории. Сосредоточьтесь на playback path и масштабировании.
+hidden:
+  functional:
+    - "Выдавать каталог и авторизованную playback session"
+    - "Поддерживать adaptive bitrate HLS или DASH"
+    - "Продолжать просмотр с позиции пользователя на другом устройстве"
+    - "Защищать платный контент подписанными URL и DRM-лицензией"
+    - "Собирать события старта, буферизации, качества и завершения"
+  nonfunctional:
+    - "Playback API p99 не более 200 мс"
+    - "Video start time p95 не более 2 секунд при нормальной сети"
+    - "Доступность playback control plane 99.99%"
+    - "Сегменты должны обслуживаться при региональном отказе origin"
+    - "Прогресс просмотра может отставать до 10 секунд, но не должен заметно откатываться"
+  scale:
+    - "100 млн MAU и 10 млн одновременных зрителей"
+    - "Средний поток 5 Мбит/с, глобальный egress около 50 Тбит/с в пик"
+    - "5 млн видео и 20 ПБ закодированных сегментов"
+    - "Пик 200 тысяч созданий playback session в секунду"
+    - "2 млн QoE-событий в секунду"
+reveal_on_question:
+  - id: functional
+    keywords: ["функционал", "каталог", "playback", "hls", "dash", "битрейт", "прогресс", "drm", "аналитик"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["latency", "start", "задержк", "доступн", "sla", "регион", "отказ", "прогресс", "консистент"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["qps", "нагрузк", "зрител", "одновремен", "тбит", "петабайт", "событ", "видео"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Клиент получает metadata из Catalog API, затем вызывает POST /playback-sessions с video_id, device capability и network hints. Playback Service проверяет entitlement, возрастные и географические ограничения, выбирает codec/DRM и возвращает короткоживущий signed master-manifest URL, license endpoint и session_id. Manifest указывает на immutable versioned media segments. Клиентский ABR-алгоритм выбирает вариант по throughput и buffer, поэтому control plane не участвует в запросе каждого сегмента.
+
+    Сегменты и manifests хранятся в multi-region object storage и раздаются через глобальный CDN. Cache key включает content version, но не пользователя; авторизация выполняется signed cookie или token на path, сохраняя общий кэш. Origin shield уменьшает miss storm, а популярные новые релизы предварительно прогреваются. При отказе региона CDN переключается на второй origin; неизменяемые сегменты безопасно кэшируются долго, manifests имеют управляемый TTL. DRM License Service валидирует session и выдаёт ограниченную лицензию, не передавая ключ через CDN. Отзыв права влияет на новую session и обновление лицензии в пределах выбранного окна.
+
+    Прогресс клиент отправляет периодически с position, event_time и монотонным sequence. Ingest пишет события в log, consumer обновляет KV по user_id+video_id только более новой последовательностью; межустройственная eventual consistency до десяти секунд допустима. QoE telemetry идёт отдельным batch endpoint и потоковым pipeline, чтобы аналитика не влияла на playback. Сервисы control plane активны в нескольких регионах, entitlement cache имеет короткий TTL и явную политику fail-open/closed для разных типов контента. Наблюдаемость соединяет CDN logs и client beacons: video start time, rebuffer ratio, bitrate switches, fatal playback errors, CDN hit ratio, origin egress, license latency и session failures по ISP, устройству и региону. Synthetic playback проверяет полный путь manifest-сегмент-license, а capacity alerts следят за origin shield и лицензированием, не только за API.
+  tradeoffs:
+    - "Длинные сегменты эффективнее CDN, короткие уменьшают старт и реакцию ABR, но увеличивают запросы и overhead."
+    - "Signed URL на каждый сегмент точнее контролирует доступ, signed cookie сохраняет общий manifest и проще для CDN."
+    - "Multi-origin повышает устойчивость, но требует репликации всех опубликованных immutable versions."
+    - "Частая запись прогресса точнее, batch раз в несколько секунд существенно дешевле."
+    - "Короткая DRM-лицензия быстрее отзывает доступ, но повышает нагрузку и риск прерывания просмотра."
+    - "Prewarm улучшает премьеру, но ошибочный прогноз расходует egress и cache capacity."
+  diagram: diagrams/vod-streaming-platform.gold.drawio
+rubric_overrides:
+  - "Кандидат должен отделить control plane от CDN data plane и посчитать порядок egress."
+  - "Оценивать совместимость авторизации с общим CDN-кэшем."
+  - "Нужна стратегия monotonic progress для нескольких устройств."
+  - "QoE должно измеряться клиентскими сигналами, включая start time и rebuffer ratio."

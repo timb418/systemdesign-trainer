@@ -1,0 +1,28 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон"><mxGraphModel dx="1400" dy="900" grid="1"><root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="targets" value="Scrape Targets / Push Jobs" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="20" y="180" width="170" height="60" as="geometry"/></mxCell>
+    <mxCell id="discovery" value="Service Discovery&#xa;versioned target leases" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;" vertex="1" parent="1"><mxGeometry x="20" y="40" width="180" height="75" as="geometry"/></mxCell>
+    <mxCell id="collectors" value="Regional Collectors" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="230" y="180" width="150" height="60" as="geometry"/></mxCell>
+    <mxCell id="distributor" value="Distributor&#xa;limits + series ring" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1"><mxGeometry x="430" y="170" width="160" height="80" as="geometry"/></mxCell>
+    <mxCell id="ingesters" value="Ingester RF=3&#xa;WAL + hot chunks&#xa;versioned histogram schema" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" vertex="1" parent="1"><mxGeometry x="650" y="155" width="180" height="100" as="geometry"/></mxCell>
+    <mxCell id="blocks" value="Object Store Blocks&#xa;index + downsampling" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="880" y="40" width="190" height="90" as="geometry"/></mxCell>
+    <mxCell id="query" value="Query Frontend + Queriers&#xa;split/cache/fairness" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="880" y="170" width="200" height="90" as="geometry"/></mxCell>
+    <mxCell id="dashboard" value="Dashboards / API" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="1140" y="190" width="150" height="60" as="geometry"/></mxCell>
+    <mxCell id="rules" value="Rule Evaluators&#xa;lease + for-state" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;" vertex="1" parent="1"><mxGeometry x="870" y="350" width="180" height="80" as="geometry"/></mxCell>
+    <mxCell id="alerts" value="HA Alert Managers&#xa;group/dedupe/silence" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;" vertex="1" parent="1"><mxGeometry x="1120" y="350" width="190" height="80" as="geometry"/></mxCell>
+    <mxCell id="meta" value="Independent Meta-monitoring&#xa;external probes + alerts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1"><mxGeometry x="430" y="350" width="200" height="80" as="geometry"/></mxCell>
+    <mxCell id="e1" value="scrape / push samples" edge="1" parent="1" source="targets" target="collectors"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="remote-write batches" edge="1" parent="1" source="collectors" target="distributor"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="fingerprint + quorum write" edge="1" parent="1" source="distributor" target="ingesters"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" value="immutable compressed blocks" edge="1" parent="1" source="ingesters" target="blocks"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e5" value="hot chunks" edge="1" parent="1" source="query" target="ingesters"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e6" value="historical block query" edge="1" parent="1" source="query" target="blocks"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e7" value="bounded PromQL" edge="1" parent="1" source="dashboard" target="query"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e8" value="fixed timestamp evaluation" edge="1" parent="1" source="rules" target="query"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e9" value="alert instance fingerprint" edge="1" parent="1" source="rules" target="alerts"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e10" value="deduped notifications" edge="1" parent="1" source="alerts" target="dashboard"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e11" value="scrape assignments" edge="1" parent="1" source="discovery" target="collectors"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e12" value="black-box health / independent page" edge="1" parent="1" source="meta" target="alerts"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root></mxGraphModel></diagram>
+</mxfile>

@@ -109,6 +109,12 @@ func buildEvalPayload(sess store.Session, t tasks.Task, msgs []store.Message, to
 		b.WriteString(l)
 		b.WriteByte('\n')
 	}
+	b.WriteString("\nОсобые акценты оценки для этой задачи:\n")
+	for _, l := range t.RubricOverrides {
+		b.WriteString("- ")
+		b.WriteString(l)
+		b.WriteByte('\n')
+	}
 	b.WriteString("\nТранскрипт:\n")
 	for _, m := range msgs {
 		fmt.Fprintf(&b, "[%s]\n%s\n\n", m.Role, m.Content)

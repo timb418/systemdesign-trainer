@@ -1,0 +1,60 @@
+id: metrics-monitoring-platform
+title: Платформа метрик и мониторинга
+difficulty: 3
+architecture_types:
+  - metrics
+  - queues
+duration_min: 55
+canvas: blank
+prompt_public: |
+  Спроектируйте платформу мониторинга для инфраструктуры и приложений.
+  Она принимает метрики, строит графики и уведомляет о проблемах. Уточните модель данных и ограничения.
+hidden:
+  functional:
+    - "Push и pull сбор counters, gauges и histograms"
+    - "Запрос временных рядов с агрегацией и downsampling"
+    - "Recording rules и alert rules с окнами и группировкой"
+    - "Дашборды и service discovery целей"
+    - "Маршрутизация, дедупликация и silence уведомлений"
+  nonfunctional:
+    - "95% samples доступны запросу < 15 секунд после измерения"
+    - "Alert evaluation не пропускает устойчивое нарушение дольше двух интервалов"
+    - "Ingestion 99.99%, dashboard query p95 < 2 секунды за 24 часа"
+    - "Tenant isolation и защита от неограниченной cardinality"
+    - "Допускаются редкие дубликаты samples, но не лавина повторных alerts"
+  scale:
+    - "50 млн активных time series и 15 млн samples/с"
+    - "10k tenant-ов и 2 млн scrape targets"
+    - "Retention raw 30 дней, downsampled 2 года"
+    - "100k alert rules вычисляются каждые 15 секунд"
+    - "30k concurrent dashboard queries, до 100 панелей на dashboard"
+reveal_on_question:
+  - id: functional
+    keywords: ["push", "pull", "counter", "gauge", "histogram", "query", "rule", "alert", "dashboard", "silence"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["свеж", "задержк", "alert", "доступн", "latency", "изоляц", "cardinality", "дубликат"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["series", "sample", "tenant", "target", "retention", "rule", "dashboard", "concurrent", "масштаб"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Service Discovery получает target metadata из orchestrator/cloud registry, выдаёт versioned scrape assignments collectors и удаляет stale targets по lease. Agents или regional collectors scrape targets и отправляют сжатые batches через remote-write. Counter/gauge кодируются как sample(metric, sorted labels, timestamp, scalar value). Classic histogram — согласованный набор cumulative bucket series с обязательными le и schema_id плюс count/sum; native histogram — одна атомарная sample с schema/version, count, sum и sparse positive/negative buckets. Ingest отклоняет несовместимую schema, а merge/downsampling сохраняют monotonic cumulative buckets и не смешивают разные schema без явной конвертации. Ingest gateway проверяет tenant, limits и label policy, вычисляет fingerprint отсортированного label set и маршрутизирует series к shard. Distributor пишет целый histogram batch в несколько ingester-ов по consistent hash; ingester держит последние chunks в памяти/WAL, реплицирует RF=3 и после quorum подтверждает batch. Закрытые immutable chunks и inverted label index выгружаются в object storage, а compactor создаёт крупные блоки и downsampled уровни.
+
+    Query frontend разбивает диапазон по времени и shard, кэширует результаты, применяет fairness budget и отправляет subqueries querier-ам. Querier объединяет свежие chunks ingester-а с историческими blocks, дедуплицирует реплики и выполняет rate/increase с учётом counter reset. Для dashboard запросы объединяются и ограничиваются по scanned samples. Cardinality budget применяется при ingest по tenant/metric; подозрительные labels отклоняются или агрегируются до того, как исчерпают индекс.
+
+    Rule evaluator распределяет rule groups consistent hashing-ом и владеет lease. Он читает данные на фиксированном evaluation timestamp, сохраняет состояние for-duration и пишет alert instance в replicated state. Alert manager группирует, дедуплицирует по fingerprint, учитывает silence/inhibition и отправляет notification с retry; HA-реплики gossip-ят состояние, чтобы не удвоить сообщения. Recording rules возвращаются через тот же ingestion с origin marker. При отказе ingester WAL replay восстанавливает head, ring исключает unhealthy node и repair восстанавливает RF. Метрики самой платформы: accepted/dropped samples, active series/cardinality, replication failures, WAL/object-store lag, query scanned bytes/p99, rule evaluation lag/misses, alert state transitions и notification failures. Отдельный meta-monitoring контур следит за платформой, чтобы её отказ не скрывал инцидент.
+  tradeoffs:
+    - "Pull упрощает health discovery, push подходит short-lived jobs; gateway унифицирует оба пути."
+    - "RF=3 в горячем слое повышает доступность ценой утроения свежих данных."
+    - "Object storage дёшев, но запрос требует block index, compaction и cache."
+    - "Жёсткий cardinality limit защищает платформу, но может отбросить полезные новые labels."
+    - "HA alert evaluators надёжнее, однако нужна дедупликация notifications."
+  diagram: diagrams/metrics-monitoring-platform.gold.drawio
+rubric_overrides:
+  - "Кандидат объясняет fingerprint series, inverted label index и проблему cardinality."
+  - "Histogram имеет versioned bucket schema и атомарные/согласованные правила ingest, merge и downsampling."
+  - "Горячие WAL/chunks и исторические object-store blocks объединяются в запросе."
+  - "Alert state включает for-duration, lease и дедупликацию уведомлений."
+  - "Есть meta-monitoring независимого контура."

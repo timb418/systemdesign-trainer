@@ -1,0 +1,59 @@
+id: priority-job-platform
+title: Платформа приоритетных заданий
+difficulty: 3
+architecture_types:
+  - queues
+  - api_gateway
+duration_min: 55
+canvas: blank
+prompt_public: |
+  Спроектируйте общую платформу фоновых заданий для многих команд.
+  Важные задания должны исполняться раньше обычных. Уточните, что именно означает приоритет и какие гарантии нужны.
+hidden:
+  functional:
+    - "Публикация задания с tenant, классом приоритета и deadline"
+    - "Справедливое распределение воркеров между tenant-ами и приоритетами"
+    - "Lease, heartbeat, retry и dead-letter queue"
+    - "Отмена задания и просмотр его состояния и попыток"
+    - "Динамическая настройка квот и весов без остановки очереди"
+  nonfunctional:
+    - "At-least-once доставка и идемпотентный контракт обработчиков"
+    - "p99 ожидания критического класса < 1 секунды при нагрузке в рамках квоты"
+    - "Низкий приоритет не должен голодать дольше 10 минут"
+    - "Изоляция tenant-ов: один клиент не расходует больше своей квоты"
+    - "Доступность control plane и data plane 99.95%"
+  scale:
+    - "5 000 tenant-ов и 12 классов заданий"
+    - "Средняя публикация 80k jobs/с, пик 300k jobs/с"
+    - "1 млн воркеров, до 250k одновременных lease"
+    - "Средний payload 4 КБ, максимум 512 КБ"
+    - "Backlog до 2 млрд заданий, retention результата 30 дней"
+reveal_on_question:
+  - id: functional
+    keywords: ["функционал", "приоритет", "deadline", "справедлив", "квот", "отмен", "retry", "состояни"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["гаранти", "голод", "starvation", "latency", "изоляц", "доступн", "sla", "дубликат"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["qps", "масштаб", "tenant", "воркер", "payload", "backlog", "одноврем", "retention"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Data plane принимает POST /v1/jobs с tenant_id, queue, priority_class, deadline, payload_ref и idempotency_key. Status API читает материализованное состояние Job(job_id, state, attempts, lease_owner, lease_until, version). Gateway применяет auth, лимит публикации и размер payload. Router по queue и shard кладёт запись в durable partitioned log с репликацией RF=3; большой payload хранится отдельно. Control plane держит версии конфигурации tenant weights, concurrency limits и разрешённых классов, а брокеры получают их через watch и продолжают работать с последней версией при недоступности control plane.
+
+    В каждом shard задания индексируются по нескольким priority lane. Scheduler не выбирает всегда максимальный lane: сначала применяет per-tenant token bucket и concurrency cap, затем weighted deficit round robin между tenant-ами, а внутри tenant — priority плюс aging. Для измеримой границы starvation каждый tenant резервирует минимальную долю dispatch capacity для oldest-job lane: задание старше девяти минут обходит обычный priority, а admission control не принимает нагрузку, при которой этот reserve не способен обслужить backlog до десяти минут. Гарантия действует только для заданий в рамках согласованной квоты; excess traffic получает 429 или остаётся без SLO. Deadline используется для earliest-deadline-first только внутри одного класса; просроченные задачи получают заданную политику execute или expire. Worker запрашивает подходящие типы, получает lease с fencing token, heartbeat-ит его и подтверждает результат условным переходом версии.
+
+    Сбой после эффекта, но до ack даёт повтор, поэтому job_id является ключом идемпотентности у downstream. Истёкший lease возвращает job с backoff; poison job отправляется в DLQ. Падение scheduler-а безопасно: новый leader восстанавливает cursor по replicated log и таблице lease. Горячий tenant ограничивается квотой, а свободная ёмкость может временно заимствоваться с отзывом. Метрики строятся по tenant/class: queue age percentiles, deadline misses, starvation age, tokens denied, active leases, retry и DLQ, scheduler decision latency и worker saturation. Decision log с причиной выбора позволяет разбирать жалобы на несправедливость.
+  tradeoffs:
+    - "Строгий priority queue минимизирует задержку critical, но вызывает starvation; oldest-job reserve даёт измеримую границу ценой части capacity."
+    - "Отдельные lane проще масштабировать, но атомарный выбор между ними требует scheduler-а."
+    - "Жёсткие квоты дают изоляцию, но оставляют ресурсы пустыми; borrowing повышает утилизацию ценой сложности."
+    - "Push к воркерам быстрее реагирует, pull лучше учитывает capacity и backpressure."
+    - "Точное глобальное EDF слишком дорого; локальный EDF масштабируется, но не даёт глобального оптимума."
+  diagram: diagrams/priority-job-platform.gold.drawio
+rubric_overrides:
+  - "Кандидат формализует порядок выбора: квота tenant-а, справедливость, приоритет, deadline."
+  - "Кандидат предлагает измеримую защиту от starvation."
+  - "Control plane отделён от горячего пути выдачи заданий."
+  - "Схема содержит lease/fencing и обратный поток ack/heartbeat."

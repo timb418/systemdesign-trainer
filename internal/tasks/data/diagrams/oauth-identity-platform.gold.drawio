@@ -1,0 +1,94 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон">
+    <mxGraphModel dx="1400" dy="820" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="850">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="browser" value="Браузер пользователя" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="30" y="210" width="160" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="client" value="OAuth-клиент" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="30" y="390" width="160" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge" value="Global Edge / WAF" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="250" y="270" width="160" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="authorize" value="Authorization Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="490" y="150" width="180" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="token" value="Token Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="490" y="370" width="180" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="codekv" value="KV: одноразовые code" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="760" y="80" width="180" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="sql" value="SQL: tenant, consent, token family" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="750" y="270" width="200" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="hsm" value="KMS / HSM Signing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="770" y="460" width="170" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="cdn" value="CDN: Discovery + JWKS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="460" width="190" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="resource" value="Resource Server" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="1010" y="270" width="180" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="introspect" value="Opaque Token Introspection" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="1010" y="120" width="200" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="idp" value="Внешний SAML / OIDC IdP" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="760" y="630" width="200" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="audit" value="Журнал аудита" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="650" width="160" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" value="GET /authorize + state + nonce + PKCE" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="browser" target="edge">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" value="tenant-aware route" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="edge" target="authorize">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" value="PUT code, TTL 60s" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="authorize" target="codekv">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" value="client + consent policy" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="authorize" target="sql">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" value="SAML / OIDC federation" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="authorize" target="idp">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" value="POST /token + verifier + confidential client auth" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="client" target="token">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" value="atomic consume code" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="token" target="codekv">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8" value="rotate refresh family" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="token" target="sql">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e9" value="sign digest by tenant key" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="token" target="hsm">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e10" value="публикация public JWKS" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="hsm" target="cdn">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e11" value="JWT access token" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="client" target="resource">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e12" value="GET JWKS, локальная проверка" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="resource" target="cdn">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e13" value="admin + security events" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="sql" target="audit">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e14" value="opaque token + client auth" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="resource" target="introspect">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e15" value="active grant / family status" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="introspect" target="sql">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

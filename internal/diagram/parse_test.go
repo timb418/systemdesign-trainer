@@ -8,7 +8,7 @@ import (
 	"github.com/timb418/systemdesign-trainer/internal/tasks"
 )
 
-func TestParseGoldDiagram(t *testing.T) {
+func TestParseTaskDiagrams(t *testing.T) {
 	fsys, err := tasks.Embedded()
 	if err != nil {
 		t.Fatal(err)
@@ -17,26 +17,37 @@ func TestParseGoldDiagram(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	task, ok := bank.Get("url-shortener-v1")
-	if !ok {
-		t.Fatal("no task")
+
+	for _, task := range bank.All() {
+		t.Run(task.ID+"/gold", func(t *testing.T) {
+			assertDiagram(t, bank, task.PreferredSolution.Diagram, 6, 6)
+		})
+		if task.Canvas == "sketch" {
+			t.Run(task.ID+"/starter", func(t *testing.T) {
+				assertDiagram(t, bank, task.StarterDiagram, 4, 3)
+			})
+		}
 	}
-	xml, err := bank.ReadDiagram(task.PreferredSolution.Diagram)
+}
+
+func assertDiagram(t *testing.T, bank *tasks.Bank, path string, minNodes, minEdges int) {
+	t.Helper()
+	xml, err := bank.ReadDiagram(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	topo := diagram.Parse(xml)
-	if len(topo.Nodes) < 4 {
-		t.Fatalf("nodes: %+v", topo.Nodes)
+	if len(topo.Nodes) < minNodes {
+		t.Fatalf("%s nodes: got %d want at least %d: %+v", path, len(topo.Nodes), minNodes, topo.Nodes)
 	}
-	if len(topo.Edges) < 3 {
-		t.Fatalf("edges: %+v", topo.Edges)
+	if len(topo.Edges) < minEdges {
+		t.Fatalf("%s edges: got %d want at least %d: %+v", path, len(topo.Edges), minEdges, topo.Edges)
 	}
 	if !strings.Contains(topo.Dump, "-->") {
-		t.Fatalf("dump: %s", topo.Dump)
+		t.Fatalf("%s dump: %s", path, topo.Dump)
 	}
 	if !strings.Contains(topo.Human(), "Узлы:") || !strings.Contains(topo.Human(), "Связи:") {
-		t.Fatalf("human: %s", topo.Human())
+		t.Fatalf("%s human: %s", path, topo.Human())
 	}
 }
 

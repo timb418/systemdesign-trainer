@@ -1,0 +1,23 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон"><mxGraphModel dx="1200" dy="800" grid="1"><root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="clients" value="Web-клиенты&#xa;CRDT + optimistic UI" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="20" y="180" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="gateway" value="Realtime Gateway&#xa;WebSocket + ACL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1"><mxGeometry x="240" y="180" width="160" height="80" as="geometry"/></mxCell>
+    <mxCell id="session" value="Board Session Shard&#xa;sequence + dedupe" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" vertex="1" parent="1"><mxGeometry x="460" y="180" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="log" value="Operation Log RF=3" style="shape=process;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="700" y="60" width="160" height="60" as="geometry"/></mxCell>
+    <mxCell id="pubsub" value="Regional Fan-out Pub/Sub" style="shape=process;whiteSpace=wrap;html=1;fillColor=#ffe6cc;" vertex="1" parent="1"><mxGeometry x="700" y="190" width="170" height="60" as="geometry"/></mxCell>
+    <mxCell id="snapshotter" value="CRDT Snapshotter" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="700" y="350" width="160" height="60" as="geometry"/></mxCell>
+    <mxCell id="objects" value="Snapshot Object Store" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="930" y="340" width="160" height="80" as="geometry"/></mxCell>
+    <mxCell id="presence" value="Lossy Presence&#xa;TTL + coalescing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;" vertex="1" parent="1"><mxGeometry x="250" y="350" width="160" height="70" as="geometry"/></mxCell>
+    <mxCell id="e1" value="op_id / client_seq" edge="1" parent="1" source="clients" target="gateway"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="authorized operation" edge="1" parent="1" source="gateway" target="session"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="quorum append" edge="1" parent="1" source="session" target="log"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" value="committed delta" edge="1" parent="1" source="session" target="pubsub"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e5" value="fan-out by board" edge="1" parent="1" source="pubsub" target="gateway"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e6" value="compact operation range" edge="1" parent="1" source="log" target="snapshotter"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e7" value="versioned snapshot" edge="1" parent="1" source="snapshotter" target="objects"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e8" value="snapshot on reconnect" edge="1" parent="1" source="objects" target="gateway"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e9" value="cursor ≤10 Hz" edge="1" parent="1" source="clients" target="presence"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e10" value="ephemeral updates" edge="1" parent="1" source="presence" target="gateway"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root></mxGraphModel></diagram>
+</mxfile>

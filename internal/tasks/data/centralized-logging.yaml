@@ -1,0 +1,60 @@
+id: centralized-logging
+title: Централизованный сбор логов
+difficulty: 2
+architecture_types:
+  - metrics
+  - queues
+  - search
+duration_min: 40
+canvas: blank
+prompt_public: |
+  Спроектируйте платформу, куда сервисы отправляют логи и где инженеры ищут причины инцидентов.
+  Начните с формата, запросов и гарантий доставки.
+hidden:
+  functional:
+    - "Приём структурированных логов через agents и HTTP ingestion"
+    - "Поиск по времени, service, severity, trace_id и полнотекстовым полям"
+    - "Live tail с фильтром и ограничением скорости"
+    - "Retention tiers, удаление по tenant и экспорт архива"
+    - "Сохранённые запросы и алерты по log pattern"
+  nonfunctional:
+    - "Agent не блокирует приложение и ограничивает локальный disk buffer"
+    - "95% логов доступны для поиска не позже 10 секунд"
+    - "Ingestion доступен 99.95%, допускается at-least-once и дедупликация"
+    - "Строгая tenant isolation, шифрование и редактирование секретов"
+    - "Запрос одного tenant не ухудшает ingest и поиск остальных"
+  scale:
+    - "200k hosts и 50k services"
+    - "Средний поток 8 млн событий/с, пик 25 млн/с"
+    - "Средняя запись 700 байт, 500 ТБ raw в день"
+    - "Hot retention 7 дней, warm 30 дней, archive 1 год"
+    - "20k concurrent search и 100k live-tail sessions"
+reveal_on_question:
+  - id: functional
+    keywords: ["agent", "ingest", "поиск", "trace", "tail", "retention", "экспорт", "алерт"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["блокир", "задержк", "доступн", "дубликат", "изоляц", "шифр", "секрет", "noisy"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["host", "service", "qps", "событ", "байт", "терабайт", "retention", "concurrent", "масштаб"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Node agent читает stdout/files, добавляет tenant, service, host, timestamp и monotonic local sequence, выполняет multiline parsing и отправляет сжатые batches по mTLS. Он не блокирует приложение: использует bounded memory и disk spool, при переполнении применяет заданную drop policy и сообщает dropped_bytes. Regional ingest gateway проверяет schema/quota, маскирует секреты по правилам и назначает ingest_time. Batch получает producer_id/sequence для дедупликации и пишется в RF=3 partitioned log; partition key tenant+service распределяет поток.
+
+    Indexers читают log at-least-once, нормализуют поля и формируют immutable сегменты по tenant/time bucket. Инвертированный индекс содержит только разрешённые indexed fields и tokenized message, columnar store — остальные поля; готовый segment и manifest публикуются атомарно в object storage. Hot shards держат локальный SSD cache, warm/archive остаются в дешёвом storage. Query coordinator проверяет RBAC, pruning по времени/tenant/service выбирает сегменты, fan-out ограничивается budget, а результаты merge-ятся по event_time с указанием ingest_time. Live tail читает отдельный pub/sub после durable append и использует sampling/backpressure.
+
+    Дубликаты допустимы на ingest, но event_id=(producer,sequence) убирается indexer-ом в окне. Поздние логи попадают в текущий manifest с исходным event_time. Lifecycle compaction объединяет маленькие сегменты и удаляет их только после обновления manifest; tenant deletion создаёт tombstone и подтверждаемую rewrite-задачу. При падении indexer новый consumer продолжает checkpoint, а поисковая свежесть измеряется watermark. Noisy tenant ограничивается ingest/search token buckets и отдельными worker pools. Метрики: agent spool/drop, ingest ack, broker lag, index freshness, parse/redaction failures, segment size, query fan-out/p99, scanned bytes, live-tail drops и cost per tenant. Trace запроса показывает медленные shards без записи содержимого логов.
+  tradeoffs:
+    - "At-least-once защищает от потерь, но требует event identity и дедупликации."
+    - "Индексировать все поля удобно, но резко увеличивает стоимость; schema-on-read дешевле и медленнее."
+    - "Локальный agent spool переживает сеть, но ограничен диском и требует drop policy."
+    - "Live tail после durable log надёжнее прямого push, но добавляет небольшую задержку."
+    - "Object storage снижает цену retention, но требует сегментов, manifest и кэша."
+  diagram: diagrams/centralized-logging.gold.drawio
+rubric_overrides:
+  - "Кандидат проектирует bounded non-blocking agent и явно выбирает поведение при заполнении spool."
+  - "Разделены durable ingest, indexing, search и lossy live tail."
+  - "Есть tenant quotas и ограничение query fan-out."
+  - "Redaction выполняется до долговечного общего хранения."

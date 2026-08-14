@@ -1,0 +1,81 @@
+id: direct-messenger
+title: Личные сообщения
+difficulty: 2
+architecture_types:
+  - chat
+  - queues
+duration_min: 40
+canvas: blank
+prompt_public: |
+  Спроектируйте обмен сообщениями один-на-один: доставка в реальном времени, история, офлайн-получатели и базовые статусы.
+hidden:
+  functional:
+    - "Отправлять текстовое сообщение одному собеседнику"
+    - "Получать историю с cursor pagination"
+    - "Показывать sent, delivered и read"
+    - "Доставлять после reconnect без дублей"
+    - "Удалять сообщение у себя и у всех в течение окна"
+  nonfunctional:
+    - "p99 send ack менее 150 мс"
+    - "Online доставка p95 менее 500 мс"
+    - "Доступность отправки 99.99%"
+    - "Сообщение не теряется после accepted ack"
+    - "Порядок стабилен внутри диалога"
+  scale:
+    - "30 млн DAU"
+    - "Пик 250k сообщений/с"
+    - "Среднее сообщение 1 КБ"
+    - "До 5 одновременных соединений пользователя"
+    - "История хранится 5 лет"
+reveal_on_question:
+  - id: functional
+    keywords: ["send direct message", "history cursor", "delivery receipt", "reconnect dedup", "delete for all"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["send ack p99", "online delivery p95", "durable accepted", "conversation order", "send availability"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["messenger DAU", "messages per second", "message size", "connections per user", "history retention"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    WebSocket gateway принимает SendMessage с client_message_id; REST history использует conversation sequence cursor.
+    Ack различает accepted, delivered и read; reconnect передаёт last_received_seq.
+    Модель данных.
+    Conversation имеет два member ID и shard; message хранит conversation_id, server_seq, client_id, sender, body_ref и status.
+    Receipt хранит high watermark на user/device, а не строку на каждое сообщение.
+    Основные потоки.
+    Gateway авторизует и вызывает message service, который резервирует sequence и durable пишет message/outbox до accepted ack.
+    Delivery log маршрутизирует событие на online sessions либо push; history закрывает gap.
+    Масштабирование.
+    Conversation_id выбирает shard, gateways stateless кроме connection registry.
+    Delivery partitions сохраняют порядок conversation; history store делится по conversation/time.
+    Batch receipts уменьшают write amplification.
+    Согласованность.
+    Accepted означает durable quorum.
+    At-least-once delivery дедуплицируется client_message_id и message_id; server_seq задаёт порядок.
+    Read watermark монотонен, а cross-device receipt eventual consistent.
+    Отказы и восстановление.
+    При разрыве WebSocket клиент reconnect и запрашивает gap.
+    Недоступный recipient не блокирует send.
+    Poison push отделяется; shard failover не выдаёт повторный sequence epoch без fencing.
+    Наблюдаемость.
+    Метрики send ack, end-to-end delivery, reconnect gap size, duplicates, sequence gaps, outbox age, online session routing и receipt lag.
+    Trace связывает client_message_id с delivery attempts.
+    Практические решения.
+    Тело можно хранить рядом с metadata для малых сообщений; вложения идут отдельно.
+    Delete-for-all создаёт tombstone с version и доставляется как control event.
+    Push не содержит чувствительный body.
+  tradeoffs:
+    - "Per-conversation sequence против timestamp order"
+    - "WebSocket против polling"
+    - "Receipt per-message против high watermark"
+    - "Exactly-once обещание против at-least-once плюс dedup"
+    - "Синхронный recipient delivery против durable send ack"
+  diagram: diagrams/direct-messenger.gold.drawio
+rubric_overrides:
+  - "Оценивается смысл accepted/delivered/read"
+  - "Нужно гарантировать порядок и дедупликацию"
+  - "Reconnect обязан восстанавливать gaps"
+  - "Accepted ack нельзя давать до durable записи"

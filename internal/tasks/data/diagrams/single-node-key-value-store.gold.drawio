@@ -1,0 +1,27 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон">
+    <mxGraphModel dx="1050" dy="680" grid="1" page="1">
+      <root>
+        <mxCell id="0"/><mxCell id="1" parent="0"/>
+        <mxCell id="api" value="KV API" vertex="1" parent="1"><mxGeometry x="30" y="220" width="120" height="60" as="geometry"/></mxCell>
+        <mxCell id="wal" value="WAL + fsync" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="210" y="80" width="130" height="80" as="geometry"/></mxCell>
+        <mxCell id="mem" value="Mutable Memtable" vertex="1" parent="1"><mxGeometry x="210" y="230" width="150" height="60" as="geometry"/></mxCell>
+        <mxCell id="imm" value="Immutable Memtables" vertex="1" parent="1"><mxGeometry x="430" y="230" width="160" height="60" as="geometry"/></mxCell>
+        <mxCell id="bloom" value="Bloom + Sparse Index" vertex="1" parent="1"><mxGeometry x="650" y="80" width="170" height="60" as="geometry"/></mxCell>
+        <mxCell id="sst" value="SSTable Levels" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="660" y="230" width="150" height="80" as="geometry"/></mxCell>
+        <mxCell id="cache" value="Block Cache" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="870" y="230" width="130" height="80" as="geometry"/></mxCell>
+        <mxCell id="compact" value="Compaction Worker" vertex="1" parent="1"><mxGeometry x="650" y="420" width="170" height="60" as="geometry"/></mxCell>
+        <mxCell id="e1" value="append batch" edge="1" parent="1" source="api" target="wal"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" value="apply after fsync" edge="1" parent="1" source="wal" target="mem"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" value="freeze" edge="1" parent="1" source="mem" target="imm"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" value="flush sorted" edge="1" parent="1" source="imm" target="sst"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" value="Get newest in mutable" edge="1" parent="1" source="api" target="mem"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" value="Get next immutable" edge="1" parent="1" source="api" target="imm"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" value="Bloom / seek SST" edge="1" parent="1" source="api" target="bloom"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e8" value="read candidate block" edge="1" parent="1" source="bloom" target="sst"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e9" value="cache block" edge="1" parent="1" source="sst" target="cache"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e10" value="merge levels" edge="1" parent="1" source="compact" target="sst"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

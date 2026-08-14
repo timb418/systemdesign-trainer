@@ -1,0 +1,59 @@
+id: ad-click-analytics
+title: Аналитика показов и кликов рекламы
+difficulty: 3
+architecture_types:
+  - metrics
+  - queues
+duration_min: 55
+canvas: blank
+prompt_public: |
+  Спроектируйте систему, которая считает показы, клики и CTR рекламных кампаний почти в реальном времени.
+  Уточните точность, окна и обработку запоздавших или повторных событий.
+hidden:
+  functional:
+    - "Приём impression, click и conversion событий с идентификаторами"
+    - "Агрегации по campaign, creative, country и минутным/часовым окнам"
+    - "Почти realtime dashboard CTR и spend"
+    - "Ежедневный финальный отчёт для биллинга"
+    - "Фильтрация ботов, дублей и атрибуция conversion к клику"
+  nonfunctional:
+    - "Dashboard отстаёт не более 60 секунд и может корректироваться"
+    - "Финальный billing report детерминирован и закрывается через 48 часов"
+    - "Потеря принятых событий < 0.001%, ingestion доступен 99.99%"
+    - "Event-time семантика сохраняется при задержке и reorder"
+    - "Privacy: user identifiers псевдонимизируются и удаляются по сроку"
+  scale:
+    - "10 млн impression/с, 200k click/с, 20k conversion/с"
+    - "5 млн кампаний и 100 млн creatives"
+    - "Событие в среднем 300 байт, около 260 ТБ raw в день"
+    - "99% событий приходят за 5 минут, 0.1% позже 24 часов"
+    - "50k dashboard queries/с и 2 года агрегатов"
+reveal_on_question:
+  - id: functional
+    keywords: ["impression", "click", "conversion", "campaign", "creative", "ctr", "spend", "billing", "бот", "атрибуц"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["свеж", "финаль", "потер", "доступн", "event-time", "запазд", "reorder", "privacy"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["qps", "кампан", "creative", "байт", "терабайт", "позд", "query", "retention", "масштаб"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Edge collector принимает батчи POST /events, проверяет schema и consent, заменяет user identifier на rotating pseudonym и присваивает ingest_time. Producer генерирует event_id; gateway отвечает только после RF=3 append в partitioned log. Partition key campaign_id распределяет агрегирование, а сверхгорячие кампании дополнительно salt-ятся. Raw stream неизменно архивируется в object storage для replay. Отдельный validation stream хранит rejected events и причины без чувствительного payload.
+
+    Stream processor работает по event_time. Он дедуплицирует event_id в state store с TTL, применяет bot/rule version и поддерживает tumbling minute/hour windows. Watermark в пять минут публикует оперативные результаты, но окна остаются updateable 48 часов; позднее событие создаёт upsert с новой aggregate_version. Click связывается с impression по request/ad identifiers, conversion — с последним допустимым click по versioned attribution rule. Partial aggregates горячих salted keys merge-ятся вторым уровнем. Serving OLAP хранит materialized dimensions и метрики; dashboard явно показывает provisional/final и freshness.
+
+    Для финансового отчёта batch job через 48 часов читает immutable raw partitions, применяет зафиксированные версии dedupe, fraud и attribution и создаёт signed report manifest. Он сравнивается с потоковым итогом; расхождение выше порога блокирует invoice. Backfill пишет новую dataset version, не меняя опубликованный отчёт молча. Schema registry обеспечивает совместимость producer-ов, checkpoints и replay восстанавливают processor после сбоя. Метрики: accepted/lost estimate, duplicate/bot rate, watermark и consumer lag, late-event distribution, provisional-to-final delta, hot-key skew, attribution misses, OLAP query latency и billing reconciliation. Data lineage связывает report cell с raw partition, code version и rule bundle.
+  tradeoffs:
+    - "Ранний watermark даёт свежесть, но увеличивает корректировки; длинный повышает задержку dashboard."
+    - "Дедупликация с конечным TTL ограничивает state, но очень поздний дубль может пройти."
+    - "Salt горячей кампании масштабирует запись, но требует второго уровня агрегации."
+    - "Stream dashboard быстрый, batch final report медленнее, зато воспроизводим для денег."
+    - "Last-click attribution проста и объяснима, но не отражает вклад нескольких контактов."
+  diagram: diagrams/ad-click-analytics.gold.drawio
+rubric_overrides:
+  - "Кандидат различает provisional realtime и immutable final billing dataset."
+  - "Есть event-time watermark, allowed lateness и versioned correction."
+  - "Дедупликация и bot filtering воспроизводимы по версиям."
+  - "Hot campaign не остаётся одним partition key."

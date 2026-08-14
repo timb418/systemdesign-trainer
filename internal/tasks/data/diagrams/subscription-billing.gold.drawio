@@ -1,0 +1,24 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон"><mxGraphModel dx="1200" dy="800" grid="1"><root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="clients" value="Billing Clients" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="20" y="180" width="130" height="60" as="geometry"/></mxCell>
+    <mxCell id="api" value="Subscription API&#xa;versioned state" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1"><mxGeometry x="200" y="170" width="160" height="80" as="geometry"/></mxCell>
+    <mxCell id="store" value="Subscriptions + Plans&#xa;RF=3" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="420" y="40" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="scheduler" value="Renewal Scheduler&#xa;buckets + fencing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" vertex="1" parent="1"><mxGeometry x="420" y="170" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="invoice" value="Invoice Service&#xa;proration + rounding" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="650" y="170" width="180" height="80" as="geometry"/></mxCell>
+    <mxCell id="payment" value="Payment + Dunning Workers" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="890" y="180" width="180" height="60" as="geometry"/></mxCell>
+    <mxCell id="provider" value="Payment Provider" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;" vertex="1" parent="1"><mxGeometry x="900" y="340" width="160" height="60" as="geometry"/></mxCell>
+    <mxCell id="webhook" value="Webhook Inbox + Reconciler" style="shape=process;whiteSpace=wrap;html=1;fillColor=#ffe6cc;" vertex="1" parent="1"><mxGeometry x="630" y="340" width="200" height="60" as="geometry"/></mxCell>
+    <mxCell id="entitlement" value="Entitlement Service&#xa;dedupe + access_until" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" vertex="1" parent="1"><mxGeometry x="1090" y="60" width="180" height="80" as="geometry"/></mxCell>
+    <mxCell id="e1" value="change / cancel / pause" edge="1" parent="1" source="clients" target="api"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="CAS subscription version" edge="1" parent="1" source="api" target="store"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="due time buckets" edge="1" parent="1" source="store" target="scheduler"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" value="renewal(subscription, period)" edge="1" parent="1" source="scheduler" target="invoice"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e5" value="unique immutable invoice" edge="1" parent="1" source="invoice" target="store"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e6" value="payment attempt" edge="1" parent="1" source="invoice" target="payment"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e7" value="stable attempt key" edge="1" parent="1" source="payment" target="provider"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e8" value="signed provider event" edge="1" parent="1" source="provider" target="webhook"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e9" value="deduped status / retry" edge="1" parent="1" source="webhook" target="payment"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e10" value="versioned grant / revoke command" edge="1" parent="1" source="payment" target="entitlement"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root></mxGraphModel></diagram>
+</mxfile>

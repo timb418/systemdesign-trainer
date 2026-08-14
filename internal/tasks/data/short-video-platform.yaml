@@ -1,0 +1,62 @@
+id: short-video-platform
+title: Платформа коротких видео
+difficulty: 4
+architecture_types:
+  - video
+  - feed
+  - distributed_cache
+duration_min: 55
+canvas: sketch
+starter_diagram: diagrams/short-video-platform.starter.drawio
+prompt_public: |
+  В наброске есть загрузка видео, одна база метаданных и API ленты. Спроектируйте глобальную платформу коротких роликов с персональной бесконечной лентой.
+hidden:
+  functional:
+    - "Загружать, модерировать и публиковать короткие ролики"
+    - "Формировать персональную ленту с cursor pagination"
+    - "Записывать просмотры, лайки, подписки и скрытия"
+    - "Доставлять видео через adaptive streaming и CDN"
+    - "Удалять ролик и быстро прекращать его рекомендации"
+  nonfunctional:
+    - "Feed API p99 не более 250 мс"
+    - "Первый кадр p95 не более 1.5 секунды"
+    - "Доступность чтения ленты 99.99%"
+    - "Удалённый или заблокированный ролик исчезает из новых страниц за 10 секунд"
+    - "Сбой ML-ranking должен оставлять безопасную неперсональную выдачу"
+  scale:
+    - "300 млн DAU"
+    - "50 млн новых роликов в сутки, средний исходник 20 МБ"
+    - "В среднем около 350 тысяч и в пик 1 млн запросов страниц ленты в секунду при примерно 100 страницах на DAU в сутки"
+    - "30 млн одновременных просмотров со средним битрейтом 2 Мбит/с"
+    - "100 млрд событий просмотра и взаимодействия в сутки"
+reveal_on_question:
+  - id: functional
+    keywords: ["функционал", "загруз", "модерац", "лент", "cursor", "лайк", "подпис", "стрим", "удален"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["latency", "кадр", "задержк", "доступн", "sla", "удален", "блокир", "ml", "деградац"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["qps", "нагрузк", "dau", "ролик", "просмотр", "событ", "одновремен", "битрейт"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Upload Service выдаёт multipart signed URLs, затем запускает проверку, модерацию, транскодирование вертикальных ABR-вариантов и thumbnails. Только атомарная смена состояния video на published делает immutable manifest доступным. Metadata Store шардируется по video_id, социальный граф — по user_id, а быстрый global suppression set содержит удалённые, приватные и заблокированные ролики. Media segments обслуживает CDN с origin shield; Feed API возвращает metadata, signed playback reference и cursor, но не проксирует байты видео.
+
+    Генерация ленты использует многоступенчатый fan-out-on-read. Candidate Service параллельно получает свежие ролики подписок, региональные тренды и ANN-кандидатов интересов. Eligibility фильтрует возраст, регион, блокировки, уже просмотренное и global suppression set. Lightweight ranker сокращает тысячи кандидатов, тяжёлый model server ранжирует сотни, затем policy layer добавляет diversity авторов и тем. Feed Session Store фиксирует короткий список ranked video_id и cursor для последовательной пагинации, предотвращая дубли при изменении моделей; перед каждой страницей Feed API повторно удаляет suppressed IDs, включая fallback. Клиент заранее загружает manifest следующего одного-двух роликов, но ограничивает prefetch по сети и батарее.
+
+    View/like/hide события пакетируются клиентом в региональный ingest и durable log. Отдельные consumers обновляют счётчики, feature store и offline lake; горячие признаки допускают секундное отставание. Event_id обеспечивает дедупликацию, а sequence помогает упорядочить сессию. При таймауте ANN или model server оркестратор применяет deadline и возвращает кэшированную региональную безопасную ленту; модерационный deny-check остаётся обязательным даже в fallback. Горячие авторы не вызывают fan-out записи всем подписчикам, но их кандидаты кэшируются по регионам. Наблюдаемость охватывает p99 стадий candidate/rank, duplicate rate, suppression leakage, model timeouts, empty feed, first-frame, rebuffering, CDN hit, event lag и продуктовые watch-time/skip metrics. Shadow ranking и canary модели позволяют отделить системную стабильность от качества рекомендаций.
+  tradeoffs:
+    - "Fan-out-on-read дороже на запрос, но персонализирует быстро меняющуюся ленту; fan-out-on-write непрактичен для знаменитостей."
+    - "Фиксация feed session устраняет дубли, но выдача немного устаревает относительно нового контента."
+    - "Тяжёлый ranker повышает watch time, каскад кандидатов и жёсткий deadline удерживают p99."
+    - "Агрессивный prefetch улучшает первый кадр, но расходует трафик на быстро пропущенные ролики."
+    - "Счётчики near-real-time полезны ranking, асинхронный event log не задерживает пользовательское действие."
+    - "Региональный fallback доступен, но suppression должен оставаться глобально свежим."
+  diagram: diagrams/short-video-platform.gold.drawio
+rubric_overrides:
+  - "Кандидат должен разделить candidate generation, ranking, eligibility и diversity."
+  - "Оценивать стабильную cursor pagination без повторов при меняющемся ранжировании."
+  - "Удаление и модерация обязаны проверяться также на fallback-пути."
+  - "Нужно связать CDN/prefetch с измеримыми first-frame и rebuffer метриками."
+  - "Оценка page QPS и event volume должна согласовываться с DAU и ожидаемым числом просмотренных страниц."

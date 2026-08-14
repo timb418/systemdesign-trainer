@@ -1,0 +1,27 @@
+<mxfile host="app.diagrams.net"><diagram id="tracking" name="Эталон"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="courier" value="Courier App" vertex="1" parent="1"><mxGeometry x="20" y="40" width="110" height="50" as="geometry"/></mxCell>
+<mxCell id="ingest" value="Location Ingest" vertex="1" parent="1"><mxGeometry x="180" y="40" width="120" height="50" as="geometry"/></mxCell>
+<mxCell id="log" value="Location Log" style="shape=process" vertex="1" parent="1"><mxGeometry x="350" y="40" width="120" height="60" as="geometry"/></mxCell>
+<mxCell id="proc" value="Sequence Processor" vertex="1" parent="1"><mxGeometry x="520" y="40" width="140" height="50" as="geometry"/></mxCell>
+<mxCell id="last" value="Last Location KV" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="710" y="20" width="130" height="60" as="geometry"/></mxCell>
+<mxCell id="pub" value="Regional PubSub" style="shape=process" vertex="1" parent="1"><mxGeometry x="710" y="120" width="130" height="60" as="geometry"/></mxCell>
+<mxCell id="ws" value="WebSocket Gateways" vertex="1" parent="1"><mxGeometry x="520" y="210" width="150" height="50" as="geometry"/></mxCell>
+<mxCell id="customer" value="Customer App" vertex="1" parent="1"><mxGeometry x="340" y="210" width="120" height="50" as="geometry"/></mxCell>
+<mxCell id="order" value="Order Authorization" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="710" y="230" width="150" height="60" as="geometry"/></mxCell>
+<mxCell id="ring" value="Reconnect Ring Buffer" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="900" y="100" width="150" height="60" as="geometry"/></mxCell>
+<mxCell id="history" value="Route History Archive" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="900" y="20" width="150" height="60" as="geometry"/></mxCell>
+<mxCell id="e1" value="location sequence" edge="1" parent="1" source="courier" target="ingest"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e2" value="durable append" edge="1" parent="1" source="ingest" target="log"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e3" value="ordered partition" edge="1" parent="1" source="log" target="proc"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e4" value="conditional latest" edge="1" parent="1" source="proc" target="last"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e5" value="order update" edge="1" parent="1" source="proc" target="pub"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e6" value="channel fanout" edge="1" parent="1" source="pub" target="ws"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e7" value="authorized live point" edge="1" parent="1" source="ws" target="customer"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e8" value="authorize subscribe" edge="1" parent="1" source="ws" target="order"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e9" value="revoke control sequence" edge="1" parent="1" source="order" target="pub"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e10" value="push revoke / close" edge="1" parent="1" source="pub" target="ws"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e11" value="recent ordered events" edge="1" parent="1" source="proc" target="ring"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e12" value="resume after last sequence" edge="1" parent="1" source="ring" target="ws"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e13" value="async raw history" edge="1" parent="1" source="log" target="history"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram></mxfile>

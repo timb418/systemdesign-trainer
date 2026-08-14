@@ -1,0 +1,61 @@
+id: vector-search-platform
+title: Платформа векторного поиска
+difficulty: 4
+architecture_types:
+  - search
+  - key_value_store
+duration_min: 55
+canvas: sketch
+starter_diagram: diagrams/vector-search-platform.starter.drawio
+prompt_public: |
+  Перед вами сервис, который хранит эмбеддинги в одной базе и линейно сравнивает каждый вектор. Спроектируйте платформу приближённого поиска для нескольких команд и объясните эволюцию наброска.
+hidden:
+  functional:
+    - "Создавать коллекции с размерностью, метрикой расстояния и схемой metadata"
+    - "Загружать, обновлять и удалять векторы пакетно и по одному"
+    - "Искать top-K соседей с фильтрами по metadata"
+    - "Изолировать tenants и поддерживать разные embedding model versions"
+    - "Строить и безопасно переключать версии ANN-индекса"
+  nonfunctional:
+    - "p99 поиска top-20 не более 150 мс при recall@20 не ниже 0.95"
+    - "Доступность чтения 99.95%, записи 99.9%"
+    - "Подтверждённое обновление доступно поиску не позднее 60 секунд"
+    - "Удаление по запросу комплаенса исчезает из выдачи за 5 секунд"
+    - "Сбой перестроения индекса не влияет на текущую версию"
+  scale:
+    - "10 млрд векторов, размерность от 384 до 1536"
+    - "Средний вектор float16 размером 1.5 КБ вместе с metadata"
+    - "Пик 30 тысяч поисков в секунду; burst обновлений до 200 тысяч в секунду длится не более 5 минут и буферизуется durable log"
+    - "2 тысячи tenants, крупнейшая коллекция содержит 2 млрд объектов"
+    - "Ежедневно заменяется около 1% векторов"
+reveal_on_question:
+  - id: functional
+    keywords: ["функционал", "коллекц", "top", "metadata", "фильтр", "tenant", "модель", "обнов", "удален"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["latency", "задержк", "доступн", "sla", "recall", "свежест", "комплаенс", "сбой"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["qps", "rps", "нагрузк", "вектор", "миллиард", "размерност", "tenant", "объём", "обновлен"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Control Plane предоставляет API коллекций: POST /collections фиксирует dimension, distance metric, metadata schema и model_version, а manifest хранит активную версию индекса и размещение шардов. Data Plane принимает batch upsert/delete с idempotency key, валидирует размерность и пишет каноническую запись в реплицированный log и object storage. Metadata и последняя версия vector_id находятся в KV-каталоге. Потоковые индексаторы применяют обновления к небольшому mutable delta-index; builder периодически создаёт immutable ANN-сегменты из snapshot, проверяет recall на эталонной выборке и атомарно публикует manifest.
+
+    Query Router авторизует tenant, выбирает коллекцию и shards, строит metadata predicate и параллельно опрашивает реплики. Каждый shard ищет кандидатов в HNSW либо IVF-PQ сегментах и свежем mutable delta, затем извлекает исходные векторы для точного rerank ограниченного top-N. Coordinator объединяет результаты и возвращает top-K с version. Для селективного предфильтра используются metadata bitmaps/разделение partitions и filtered HNSW traversal либо IVF posting lists; произвольный фильтр без такой поддержки применяется после ANN с адаптивным расширением candidate budget. Если после фильтра найдено меньше K, ответ явно неполный либо выполняется bounded retry — система не обещает K любой ценой. Комплаенс-удаление немедленно записывается в распределённый tombstone cache, который каждый shard и coordinator проверяют перед ответом; позднее compaction физически удаляет данные.
+
+    Коллекции шардируются по hash vector_id, а крупные tenants получают выделенные shard groups и квоты CPU/памяти. Реплики держат индексы локально на SSD и горячие graph pages в RAM; object storage служит источником восстановления. Durable log рассчитан минимум на 60 млн событий пятиминутного burst плюс запас на catch-up и backpressure. При неудачной сборке manifest не переключается, при падении shard router использует реплику и может вернуть частичный результат только с явным признаком. Старые model versions не смешиваются без заданной миграции. Наблюдаемость включает p99, recall shadow-тестов, visited nodes, candidate count, filter selectivity, freshness lag, tombstone age, update-log headroom, build duration, shard imbalance и ошибки размерности. Алерты защищают SLO, recall и сроки обязательного удаления независимо друг от друга.
+  tradeoffs:
+    - "HNSW даёт высокий recall и низкую задержку, но дорог по памяти и обновлениям; IVF-PQ компактнее, но требует обучения и rerank."
+    - "Mutable единый индекс проще читать, immutable segments плюс delta безопаснее перестраивать и откатывать."
+    - "Предфильтрация через bitmap/partition или filtered traversal экономит ANN работу при селективных условиях, но усложняет индекс; постфильтрация проще, однако может вернуть меньше K."
+    - "float16 хранит качество ценой объёма, product quantization снижает память с измеримой потерей recall."
+    - "Общие shard groups эффективнее, выделенные группы изолируют крупнейших tenants ценой недоиспользования."
+    - "Синхронная индексация свежее, durable log и минутная eventual consistency устойчивее к пикам записи."
+  diagram: diagrams/vector-search-platform.gold.drawio
+rubric_overrides:
+  - "Кандидат должен определить ANN-алгоритм, метрику качества recall и способ её непрерывной проверки."
+  - "Нужна отдельная стратегия свежего delta и атомарного переключения полных версий."
+  - "Оценивать metadata-фильтрацию до и после ANN в зависимости от селективности."
+  - "Комплаенс-удаление должно блокировать выдачу быстрее физической compaction."
+  - "Пиковый update burst должен помещаться в durable log и иметь рассчитанное время catch-up."

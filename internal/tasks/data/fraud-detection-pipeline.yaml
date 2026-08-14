@@ -1,0 +1,61 @@
+id: fraud-detection-pipeline
+title: Пайплайн выявления мошенничества
+difficulty: 4
+architecture_types:
+  - payments
+  - metrics
+  - queues
+duration_min: 70
+canvas: blank
+prompt_public: |
+  Спроектируйте систему, которая оценивает платёж на мошенничество до авторизации и улучшает модели по последующим исходам.
+  Уточните latency, источники сигналов и требования к решению.
+hidden:
+  functional:
+    - "Синхронная оценка транзакции с ответом approve, decline или review"
+    - "Потоковый расчёт velocity-фич по карте, пользователю, устройству и merchant"
+    - "Rule engine и ML-scoring с версиями решений"
+    - "Приём chargeback/analyst labels и подготовка обучающих выборок"
+    - "Ручная очередь review и объяснение факторов решения"
+  nonfunctional:
+    - "p99 online decision < 80 мс при доступном feature store"
+    - "Доступность scoring 99.99% с явной fail-open/fail-closed политикой"
+    - "Online/offline вычисления одной фичи семантически совпадают"
+    - "Решение воспроизводимо по версиям модели, правил и feature snapshot"
+    - "PII шифруется, доступ аудитируется, retention соответствует региону"
+  scale:
+    - "Средняя нагрузка 100k платежей/с, пик 350k/с"
+    - "5 млн сырых событий/с из login, device, payment и chargeback"
+    - "20 млрд entity keys и 500 активных фич"
+    - "Feature windows от 1 минуты до 180 дней"
+    - "50 моделей, обновление ежедневно, 2% операций идут в review"
+reveal_on_question:
+  - id: functional
+    keywords: ["approve", "decline", "review", "velocity", "фич", "правил", "модел", "chargeback", "объясн"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["latency", "доступн", "fail-open", "консист", "воспроизвод", "верси", "pii", "retention"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["qps", "событ", "entity", "фич", "окно", "модел", "review", "масштаб"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Payment service вызывает POST /risk/decisions с transaction_id и ссылками на сущности. Decision gateway дедуплицирует transaction_id, параллельно получает статические profile features и online aggregates из low-latency feature store, затем запускает versioned rule engine и model server. Policy объединяет score, hard rules и лимиты в APPROVE/DECLINE/REVIEW. DecisionRecord неизменно сохраняет model_version, rule_bundle, feature timestamps и reason codes через асинхронный audit log; повтор запроса возвращает то же решение в заданном decision TTL. Жёсткий бюджет времени распределяется между lookup и inference, а fallback использует небольшой набор локально кэшированных фич и явную merchant policy.
+
+    Все события публикуются с event_id и event_time в partitioned log. Stream processor использует watermark, дедупликацию и keyed state для rolling count/sum/distinct по card, user, device и merchant. Результат записывается в online store с feature_version и as_of; raw immutable stream уходит в lake. Поздние события корректируют окна согласно политике, но не переписывают уже выданное решение. Offline pipeline применяет те же declarative feature definitions к историческим данным, point-in-time join исключает label leakage. Chargeback и analyst verdict привязываются к transaction_id, после чего model registry проводит validation, canary и контролируемое продвижение.
+
+    Online store шардируется по hash(entity_id), RF=3; горячие merchant keys считаются двухуровнево partial aggregate плюс merge. Model servers без состояния масштабируются по QPS и держат подписанную модель в памяти. При lag stream-а фичи несут freshness, policy может понизить доверие или отправить review. Наблюдаемость включает decision p99, feature miss/staleness, stream watermark lag, skew online/offline, score drift, approval и chargeback по cohort, review backlog, fallback rate и canary delta. Для расследования сохраняется trace решения, но чувствительные значения токенизируются.
+  tradeoffs:
+    - "Синхронные свежие фичи точнее, но latency и availability хуже локального кэша."
+    - "Fail-open повышает конверсию ценой fraud loss; policy должна зависеть от риска и merchant."
+    - "Точные distinct-агрегаты дороги, sketches экономят память с контролируемой погрешностью."
+    - "Исправление late events улучшает обучение, но историческое online-решение остаётся неизменным."
+    - "Общий feature DSL снижает training-serving skew, но ограничивает произвольные вычисления исследователей."
+  diagram: diagrams/fraud-detection-pipeline.gold.drawio
+rubric_overrides:
+  - "Кандидат укладывает feature lookup, rules и inference в конкретный latency budget."
+  - "Разделены event time, processing time, watermark и политика late events."
+  - "Решение воспроизводимо и объяснимо по versioned artifacts."
+  - "Обсуждаются feature freshness, fallback и fail-open/fail-closed."
+  - "Training-serving skew измеряется и предотвращается."

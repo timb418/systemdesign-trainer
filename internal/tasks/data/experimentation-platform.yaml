@@ -1,0 +1,63 @@
+id: experimentation-platform
+title: Платформа A/B-экспериментов
+difficulty: 4
+architecture_types:
+  - metrics
+  - key_value_store
+  - queues
+duration_min: 70
+canvas: blank
+prompt_public: |
+  На доске показан сервис фичефлагов и таблица событий. Превратите их в платформу контролируемых A/B-экспериментов.
+  Уточните требования к назначению вариантов, метрикам и достоверности результата.
+hidden:
+  functional:
+    - "Создание эксперимента, вариантов, аудитории и расписания"
+    - "Стабильное назначение пользователя в вариант и mutual exclusion namespaces"
+    - "Доставка конфигурации SDK и аварийный kill switch"
+    - "Сбор exposure и outcome событий"
+    - "Расчёт метрик, guardrails, confidence intervals и отчёта"
+    - "Постепенный rollout победившего варианта"
+  nonfunctional:
+    - "Assignment p99 < 10 мс локально в SDK и доступен при потере control plane"
+    - "Один субъект стабильно получает вариант для версии эксперимента"
+    - "Exposure учитывается только при фактическом показе, а не при assignment"
+    - "Отчёт воспроизводим по snapshot конфигурации и версии metric definition"
+    - "SRM и нарушение guardrail обнаруживаются не позже 15 минут"
+  scale:
+    - "50k активных экспериментов и 5k изменений конфигурации/с"
+    - "500 млн DAU и 20 млн assignment checks/с"
+    - "3 млн exposure/с и 15 млн outcome events/с"
+    - "10k metric definitions, окна от часа до 90 дней"
+    - "5 лет raw events, около 1 ПБ в день до сжатия"
+reveal_on_question:
+  - id: functional
+    keywords: ["вариант", "аудитор", "namespace", "sdk", "kill", "exposure", "метрик", "confidence", "rollout"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["latency", "стабиль", "control plane", "показ", "воспроизвод", "srm", "guardrail", "задержк"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["эксперимент", "dau", "assignment", "qps", "exposure", "outcome", "метрик", "retention", "петабайт"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Control plane хранит versioned Experiment(id, salt, unit_type, eligibility, variants, allocation, namespace, start/end) и проводит validation: веса суммируются, пересечения namespace запрещены, metric definitions закреплены. После approval создаётся подписанный immutable config snapshot. CDN/stream распространяет delta в SDK, который атомарно меняет локальную версию и сохраняет last-known-good. Assignment не требует сетевого вызова: eligibility проверяется по локальным атрибутам, bucket=hash(experiment_salt, stable_unit_id) mod 10000 выбирает неизменяемый диапазон варианта. После старта границы и variant_id существующих диапазонов не двигаются: ramp забирает только заранее зарезервированные unallocated buckets и добавляет их к варианту. Перераспределение между существующими вариантами требует новой experiment version/salt и отдельного отчёта; для долгих экспериментов альтернативой служит durable assignment registry.
+
+    SDK отдельно эмитит exposure только когда код действительно применил вариант, с assignment_id, config_version и event_id. Outcome events приходят в durable partitioned log; collector проверяет schema и consent. Stream pipeline дедуплицирует, обнаруживает sample-ratio mismatch и считает быстрые guardrails по event time. Raw события сохраняются в lake. Analysis pipeline выполняет point-in-time join exposure с outcomes по unit и исключает события до exposure. Metric definition заранее фиксирует estimand, analysis window, randomization unit и способ свёртки повторных outcomes. Наблюдения агрегируются до randomization unit; если один субъект образует несколько коррелированных строк, confidence interval использует cluster-robust variance, а не считает события независимыми. CUPED использует только pre-treatment covariates. Fixed-horizon analysis запрещает раннюю остановку по обычному CI; непрерывный мониторинг применяет заранее выбранный sequential test/alpha-spending. Multiple testing correction и peeking policy задаются до запуска, а отчёт выдаёт estimate, confidence interval, effective unit sample size, data-quality warnings и dataset/config/code versions.
+
+    Kill switch — высокоприоритетная подписанная delta с коротким TTL; SDK имеет безопасный default при просроченной конфигурации. Control plane реплицируется между зонами, но его отказ не ломает assignment. События шардируются по unit_id для join, тяжёлые расчёты идут в columnar warehouse, а агрегаты отчёта — в serving DB. Late events обновляют provisional результаты до закрытия окна; опубликованный final report неизменяем, rerun создаёт версию. Метрики платформы: config propagation p99, stale SDK fraction, allocation mismatch, exposure loss/duplicates, SRM, event watermark, join drop, guardrail delay, analysis cost и report reproducibility. Audit фиксирует автора каждого изменения и rollout decision.
+  tradeoffs:
+    - "Client-side assignment даёт низкую latency и автономность, но требует защищённой конфигурации и ограниченных eligibility данных."
+    - "Неизменяемые диапазоны исключают rebucketing, но ramp ограничен зарезервированными unallocated buckets."
+    - "Exposure-on-render точнее assignment logging, но требует дисциплины интеграции SDK."
+    - "Realtime guardrails быстро останавливают вред, batch analysis надёжнее для итоговой статистики."
+    - "Гибкий metric SQL ускоряет исследования, versioned registry нужен для воспроизводимости."
+  diagram: diagrams/experimentation-platform.gold.drawio
+rubric_overrides:
+  - "Кандидат отделяет control plane конфигурации от локального assignment data plane."
+  - "Объяснены stable hashing, namespace и защита от нежелательного rebucketing."
+  - "Exposure фиксируется в момент фактического воздействия."
+  - "Pipeline проверяет SRM, late events и point-in-time join."
+  - "Итог воспроизводим по config, metric, dataset и code versions."
+  - "Confidence interval соответствует randomization unit, повторным observations и заранее выбранной peeking policy."

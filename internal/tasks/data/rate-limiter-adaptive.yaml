@@ -1,0 +1,84 @@
+id: rate-limiter-adaptive
+title: Адаптивный rate limiter
+difficulty: 2
+architecture_types:
+  - rate_limiter
+  - api_gateway
+  - metrics
+duration_min: 45
+canvas: sketch
+starter_diagram: diagrams/rate-limiter-adaptive.starter.drawio
+prompt_public: |
+  Дан limiter с фиксированным глобальным порогом. Измените архитектуру так, чтобы она защищала зависимость при плавающей ёмкости и не вызывала автоколебаний.
+hidden:
+  functional:
+    - "Автоматически менять допустимую скорость по сигналам backend"
+    - "Сохранять гарантированный минимум для premium tenants"
+    - "Поддерживать ручной override с TTL"
+    - "Ограничивать скорость роста и падения лимита"
+    - "Объяснять решение через reason code"
+  nonfunctional:
+    - "p99 backend удерживается ниже 200 мс"
+    - "Контроллер обновляет лимит раз в 5 секунд"
+    - "После подтверждённой деградации вход падает на 50% не позднее 15 секунд"
+    - "Колебание лимита в steady state не превышает 10%"
+    - "Ошибочный telemetry сигнал не обнуляет трафик"
+  scale:
+    - "Входной поток 80k–250k RPS"
+    - "Backend capacity меняется от 100k до 220k RPS"
+    - "Telemetry использует 30-секундный rolling window с оценкой каждые 5 секунд"
+    - "Premium reserve составляет 20k RPS"
+    - "Минимум 3 последовательных оценки rolling window для жёсткого снижения"
+reveal_on_question:
+  - id: functional
+    keywords: ["adaptive rate", "backend signals", "premium reserve", "manual override", "reason code"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["backend p99", "время реакции", "oscillation", "ложная telemetry", "policy update cadence"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["input RPS", "backend capacity", "rolling window", "premium RPS", "bad evaluations"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    Gateway запрашивает решение у локального enforcement слоя; controller публикует signed policy с effective_rate, confidence, epoch и reason.
+    Оператор задаёт override через отдельный API с автором, причиной и expiry.
+    Модель данных.
+    Signal record содержит latency histogram, error rate, queue depth и sample count.
+    Controller state хранит EWMA, safe_capacity, previous_rate и mode.
+    Policy распределяет общий rate по tier, сохраняя premium reserve.
+    Основные потоки.
+    Collectors агрегируют backend SLI в 30-секундном rolling window; controller каждые пять секунд оценивает headroom. Три плохие оценки подтверждают деградацию, после чего multiplicative decrease снижает вход минимум вдвое за следующие 15 секунд.
+    Policy stream доставляет epoch enforcement-узлам; они реализуют token buckets, а shadow evaluator сравнивает альтернативный алгоритм.
+    Масштабирование.
+    Controller активен как один leader с горячим standby, enforcement остаётся распределённым.
+    Сигналы агрегируются по dependency и region; low-sample endpoints наследуют консервативный parent limit.
+    Обновления jittered, чтобы избежать синхронных bursts.
+    Согласованность.
+    Policy epoch монотонен; узел не применяет старую версию.
+    Telemetry eventual consistent, поэтому controller не обещает мгновенную оптимальность.
+    Reserve tier распределяется детерминированно и не заимствуется при недостоверном сигнале.
+    Отказы и восстановление.
+    При потере telemetry контроллер замораживает last-known-good и медленно снижает rate до safe floor, но не до нуля.
+    При flapping включается cooldown.
+    Потеря controller не мешает enforcement до TTL policy.
+    Наблюдаемость.
+    Дашборд связывает input rate, effective limit, backend p99/errors, queue depth, confidence и reason.
+    Алерты выявляют oscillation, stale policy, override без владельца, exhausted reserve и расхождение shadow evaluator.
+    Практические решения.
+    Стартовый фиксированный threshold заменяется feedback loop с явными guardrails.
+    Проверка проводится replay исторических инцидентов и canary на части gateway.
+    Ручной override имеет приоритет, аудит и автоматическое завершение.
+  tradeoffs:
+    - "AIMD против PID: устойчивость и объяснимость против скорости реакции"
+    - "Короткое окно против шума, длинное против запаздывания"
+    - "Общий лимит против per-tenant fairness"
+    - "Freeze last-good против conservative decay при потере telemetry"
+    - "Автоматическое управление против operator override"
+  diagram: diagrams/rate-limiter-adaptive.gold.drawio
+rubric_overrides:
+  - "Главный фокус — устойчивость feedback loop, hysteresis и задержки"
+  - "Кандидат обязан устранить фиксированный порог стартовой схемы"
+  - "Нужно защититься от stale/ложной telemetry"
+  - "Оценивается сохранение premium reserve при деградации"

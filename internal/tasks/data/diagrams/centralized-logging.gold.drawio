@@ -1,0 +1,23 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон"><mxGraphModel dx="1300" dy="850" grid="1"><root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="apps" value="Services / Hosts" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="20" y="180" width="130" height="60" as="geometry"/></mxCell>
+    <mxCell id="agents" value="Node Agents&#xa;bounded disk spool" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="190" y="170" width="160" height="80" as="geometry"/></mxCell>
+    <mxCell id="ingest" value="Regional Ingest&#xa;quota + redaction" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1"><mxGeometry x="410" y="170" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="log" value="Durable Log RF=3" style="shape=process;whiteSpace=wrap;html=1;fillColor=#ffe6cc;" vertex="1" parent="1"><mxGeometry x="640" y="180" width="150" height="60" as="geometry"/></mxCell>
+    <mxCell id="indexer" value="Indexers&#xa;dedupe + immutable segments" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" vertex="1" parent="1"><mxGeometry x="850" y="170" width="190" height="80" as="geometry"/></mxCell>
+    <mxCell id="store" value="Object Store&#xa;index + column segments" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="1090" y="40" width="180" height="90" as="geometry"/></mxCell>
+    <mxCell id="query" value="Query Coordinator&#xa;RBAC + budgets" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="1080" y="180" width="180" height="80" as="geometry"/></mxCell>
+    <mxCell id="ui" value="Search UI / Alerts" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="1080" y="360" width="170" height="60" as="geometry"/></mxCell>
+    <mxCell id="tail" value="Lossy Live-tail Pub/Sub" style="shape=process;whiteSpace=wrap;html=1;fillColor=#f8cecc;" vertex="1" parent="1"><mxGeometry x="630" y="360" width="180" height="60" as="geometry"/></mxCell>
+    <mxCell id="e1" value="stdout / structured logs" edge="1" parent="1" source="apps" target="agents"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="mTLS compressed batches" edge="1" parent="1" source="agents" target="ingest"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="producer sequence append" edge="1" parent="1" source="ingest" target="log"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" value="at-least-once partitions" edge="1" parent="1" source="log" target="indexer"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e5" value="segment + atomic manifest" edge="1" parent="1" source="indexer" target="store"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e6" value="pruned segment reads" edge="1" parent="1" source="query" target="store"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e7" value="bounded search / result" edge="1" parent="1" source="ui" target="query"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e8" value="durable post-append stream" edge="1" parent="1" source="log" target="tail"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e9" value="sampled backpressured tail" edge="1" parent="1" source="tail" target="ui"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root></mxGraphModel></diagram>
+</mxfile>

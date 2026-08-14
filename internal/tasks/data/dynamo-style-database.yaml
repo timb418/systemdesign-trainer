@@ -1,0 +1,59 @@
+id: dynamo-style-database
+title: Dynamo-подобная распределённая база
+difficulty: 5
+architecture_types:
+  - key_value_store
+duration_min: 75
+canvas: blank
+prompt_public: |
+  Завершите архитектуру глобальной Dynamo-подобной базы для корзин и профилей.
+  Сформулируйте модель консистентности и поведение при разделении сети.
+hidden:
+  functional:
+    - "Поддерживать Get, Put, Delete и условную запись с client context"
+    - "Разрешать настраиваемые N, R и W для пространства ключей"
+    - "Принимать запись в доступном регионе во время межрегионального partition"
+    - "Обнаруживать и объединять конкурирующие версии"
+    - "Автоматически восстанавливать расхождения реплик"
+  nonfunctional:
+    - "Региональная доступность чтения и записи 99.999%"
+    - "Локальные Get и Put p99 < 25 мс"
+    - "Система сохраняет eventual convergence после восстановления любой конечной сети"
+    - "Потеря целого региона не должна терять подтверждённые W=quorum записи"
+  scale:
+    - "30 ПБ данных в 12 регионах"
+    - "20 млн чтений/с и 5 млн записей/с глобально"
+    - "100 трлн ключей, среднее значение 300 байт"
+    - "Один регион может быть изолирован до 6 часов"
+    - "До 2% ключей получают конкурентные межрегиональные обновления в partition"
+reveal_on_question:
+  - id: functional
+    keywords: ["функционал", "api", "n", "quorum", "верси", "конфликт", "repair"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["консист", "доступн", "partition", "latency", "задерж", "потер", "sla"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["масштаб", "нагруз", "qps", "петабайт", "регион", "триллион", "сколько"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Клиент отправляет ключ, значение, consistency level и context ближайшему coordinator. Membership распространяется gossip, а токены consistent-hash ring имеют N владельцев в разных failure domains и регионах согласно placement policy. Coordinator параллельно обращается к предпочтительным репликам и отвечает после R чтений либо W durable записей. Sloppy quorum во время отказа использует следующие здоровые узлы кольца: hinted handoff хранит исходного владельца и срок, после восстановления передаёт версию домой. Поэтому R+W>N помогает только при пересекающемся наборе владельцев и не превращает sloppy или межрегиональные кворумы автоматически в строгую консистентность.
+
+    Каждая запись содержит dotted version vector: context клиента указывает увиденные causal версии, новая dot идентифицирует запись узла. Реплика сохраняет несравнимые siblings вместо last-write-wins. Для корзины CRDT OR-Set объединяет добавления и удаления; для неприспособленного типа API возвращает siblings приложению. Tombstone тоже версия и удаляется лишь после grace period, превышающего максимальное восстановление и anti-entropy, иначе удалённое значение воскреснет. Локальный storage engine — LSM с WAL, Bloom filters и compaction.
+
+    Get сопоставляет ответы, возвращает causal frontier и асинхронно выполняет read repair для устаревших реплик. Фоновый anti-entropy строит Merkle trees по диапазонам и сравнивает их между владельцами, передавая только различающиеся ключи. Bootstrap нового узла потоково копирует диапазоны, затем догоняет изменения; ownership меняется по epoch, чтобы не создать две независимые истины. При шестичасовом partition локальный режим принимает записи и явно увеличивает conflict rate; после связи hinted handoff, Merkle repair и resolver обеспечивают convergence. Наблюдаемость показывает quorum latency, unavailable requests, sibling count, vector size, hints age/bytes, Merkle mismatches, repair throughput, tombstones, disk debt и gossip convergence. Алерты реагируют на hints старше окна, рост siblings, отсутствие anti-entropy и потерю требуемого числа зон; трасса coordinator отмечает фактические реплики и выбранный consistency level.
+  tradeoffs:
+    - "Strict quorum vs sloppy quorum: strict лучше определяет гарантии, sloppy сохраняет доступность ценой конфликтов."
+    - "Vector clocks vs last-write-wins: векторы не теряют конкурирующие записи, но растут и требуют merge."
+    - "Read repair vs только anti-entropy: read repair быстро чинит горячие ключи, но добавляет latency и не охватывает холодные."
+    - "CRDT vs application merge: CRDT сходится автоматически для подходящего типа, прикладной merge универсальнее."
+    - "Глобальные реплики vs региональные кворумы: глобальный quorum защищает региональную потерю, но нарушает локальный p99."
+    - "Длинный tombstone grace vs экономия места: длинное окно исключает resurrection, но увеличивает storage и compaction."
+  diagram: diagrams/dynamo-style-database.gold.drawio
+rubric_overrides:
+  - "Кандидат должен явно ограничить утверждение R+W>N при sloppy quorum."
+  - "Обязательны causal context, siblings и предметная стратегия merge."
+  - "Ожидаются hinted handoff, read repair и Merkle anti-entropy как разные механизмы."
+  - "Удаление должно учитывать tombstone grace и риск resurrection."
+  - "Нужно согласовать локальный p99 с гарантией переживания потери региона."

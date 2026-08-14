@@ -1,0 +1,23 @@
+<mxfile host="app.diagrams.net"><diagram id="nearby" name="Эталон"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="app" value="Map Client" vertex="1" parent="1"><mxGeometry x="20" y="90" width="100" height="50" as="geometry"/></mxCell>
+<mxCell id="api" value="Nearby API" vertex="1" parent="1"><mxGeometry x="170" y="90" width="110" height="50" as="geometry"/></mxCell>
+<mxCell id="cover" value="H3 Cell Covering" vertex="1" parent="1"><mxGeometry x="330" y="90" width="130" height="50" as="geometry"/></mxCell>
+<mxCell id="geo" value="Cell Place Index" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="510" y="30" width="130" height="60" as="geometry"/></mxCell>
+<mxCell id="place" value="Place Metadata Store" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="510" y="140" width="150" height="60" as="geometry"/></mxCell>
+<mxCell id="rank" value="Exact Distance Ranker" vertex="1" parent="1"><mxGeometry x="710" y="90" width="150" height="50" as="geometry"/></mxCell>
+<mxCell id="write" value="Place Update Stream" style="shape=process" vertex="1" parent="1"><mxGeometry x="330" y="240" width="140" height="60" as="geometry"/></mxCell>
+<mxCell id="suppress" value="Closure Suppression" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="700" y="220" width="150" height="60" as="geometry"/></mxCell>
+<mxCell id="pit" value="Retained PIT Generations" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="900" y="20" width="160" height="60" as="geometry"/></mxCell>
+<mxCell id="e1" value="radius and filters" edge="1" parent="1" source="app" target="api"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e2" value="lat lon radius" edge="1" parent="1" source="api" target="cover"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e3" value="candidate cells" edge="1" parent="1" source="cover" target="geo"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e4" value="candidate IDs" edge="1" parent="1" source="geo" target="place"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e5" value="candidate cards + coordinates" edge="1" parent="1" source="place" target="rank"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e6" value="ranked candidates" edge="1" parent="1" source="rank" target="suppress"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e7" value="versioned index updates" edge="1" parent="1" source="write" target="geo"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e8" value="urgent closures" edge="1" parent="1" source="write" target="suppress"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e9" value="safe cursor page" edge="1" parent="1" source="suppress" target="api"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e10" value="publish immutable generation" edge="1" parent="1" source="geo" target="pit"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e11" value="pin generation in cursor" edge="1" parent="1" source="api" target="pit"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram></mxfile>

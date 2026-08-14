@@ -1,0 +1,26 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон"><mxGraphModel dx="1200" dy="800" grid="1"><root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="clients" value="Клиенты&#xa;stable row/column IDs" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="20" y="180" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="session" value="Workbook Session&#xa;ACL + op dedupe&#xa;cell conflict markers" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1"><mxGeometry x="235" y="175" width="170" height="90" as="geometry"/></mxCell>
+    <mxCell id="log" value="Revision Log RF=3" style="shape=process;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="460" y="70" width="150" height="60" as="geometry"/></mxCell>
+    <mxCell id="chunks" value="Cell Chunks + Snapshots" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="460" y="300" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="graph" value="Dependency Graph&#xa;versioned edges" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#e1d5e7;" vertex="1" parent="1"><mxGeometry x="680" y="50" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="scheduler" value="Recalc Scheduler&#xa;affected DAG" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" vertex="1" parent="1"><mxGeometry x="680" y="180" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="workers" value="Calculation Workers&#xa;revision snapshot" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="920" y="180" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="values" value="Computed Values&#xa;(cell, revision)" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#ffe6cc;" vertex="1" parent="1"><mxGeometry x="920" y="330" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="history" value="History / Rollback Builder&#xa;snapshot + tail → new revision" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;" vertex="1" parent="1"><mxGeometry x="240" y="320" width="190" height="90" as="geometry"/></mxCell>
+    <mxCell id="e1" value="edit op + base revision" edge="1" parent="1" source="clients" target="session"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="commit revision" edge="1" parent="1" source="session" target="log"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="snapshot / chunk delta" edge="1" parent="1" source="log" target="chunks"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" value="formula dependencies" edge="1" parent="1" source="log" target="graph"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e5" value="outbox changed cells" edge="1" parent="1" source="log" target="scheduler"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e6" value="affected graph lookup" edge="1" parent="1" source="scheduler" target="graph"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e7" value="DAG levels + revision" edge="1" parent="1" source="scheduler" target="workers"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e8" value="immutable inputs" edge="1" parent="1" source="chunks" target="workers"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e9" value="conditional result write" edge="1" parent="1" source="workers" target="values"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e10" value="computed delta stream" edge="1" parent="1" source="values" target="session"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e11" value="historical snapshot + operations" edge="1" parent="1" source="chunks" target="history"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e12" value="RestoreRevision as new commit" edge="1" parent="1" source="history" target="session"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root></mxGraphModel></diagram>
+</mxfile>

@@ -1,0 +1,63 @@
+id: collaborative-docs
+title: Глобальный редактор документов
+difficulty: 5
+architecture_types:
+  - collab_editing
+  - geo
+  - object_storage
+duration_min: 90
+canvas: blank
+prompt_public: |
+  Спроектируйте глобальный сервис совместного редактирования текстовых документов.
+  Пользователи могут работать одновременно и офлайн. Сформулируйте конфликтную семантику и региональную архитектуру.
+hidden:
+  functional:
+    - "Редактирование форматированного текста, списков, таблиц и комментариев"
+    - "Одновременная работа и presence пользователей из разных регионов"
+    - "Офлайн-редактирование с последующим merge"
+    - "История версий, именованные версии и восстановление"
+    - "Права на документ и отдельные комментарии, отзыв доступа в реальном времени"
+    - "Экспорт и полнотекстовый поиск с учётом ACL"
+  nonfunctional:
+    - "Локальная правка отображается мгновенно, p95 remote update < 250 мс внутри региона"
+    - "Документ детерминированно сходится после любых reorder и duplicate операций"
+    - "RPO 0 для подтверждённых правок при отказе зоны, региональный RTO < 2 минут"
+    - "Доступность редактирования 99.99%, деградация presence допустима"
+    - "Отозванный пользователь не может подтвердить новые операции после распространения ACL version"
+  scale:
+    - "100 млн DAU, 8 млн одновременных соединений в 12 регионах"
+    - "Пик 3 млн durable operations/с и 20 млн presence events/с"
+    - "Документ до 5 млн элементов, до 5 000 одновременных редакторов"
+    - "Медианный документ 200 КБ, p99 100 МБ"
+    - "История хранится бессрочно: 25 ПБ операций в год до репликации"
+reveal_on_question:
+  - id: functional
+    keywords: ["формат", "таблиц", "коммент", "presence", "offline", "верси", "прав", "поиск", "экспорт"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["latency", "сходим", "дубликат", "порядок", "rpo", "rto", "доступн", "отзыв", "acl"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["dau", "онлайн", "регион", "qps", "операц", "размер", "редактор", "петабайт", "масштаб"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Документ моделируется не строкой, а деревом блоков и inline-элементов с устойчивыми CRDT-id. Операции InsertAfter, Delete, SetAttribute и AddComment несут op_id=(actor, counter), causal context/version vector, document_id и acl_version. Клиент применяет их локально и сохраняет offline-log. Ближайший regional gateway проверяет capability, дедуплицирует сессию и передаёт операции home-region документа. Home выбирается consistent hashing с возможностью миграции; один sequencer назначает удобный commit sequence, однако сходимость не зависит от порядка доставки.
+
+    Writer пишет batch в replicated operation log с quorum между тремя зонами и возвращает durable ack. Region fan-out hubs получают журнал и распространяют delta по WebSocket; edge кэширует snapshot. CRDT разрешает concurrent insert детерминированно по position id и op_id; tombstone сохраняет ссылки. Rich-text семантика задана по типам: inline marks хранятся как add/remove диапазоны со своими op_id, поэтому concurrent bold и italic объединяются, а remove снимает только causally observed mark; SetAttribute одного ключа использует deterministic LWW по commit sequence/op_id, разные ключи merge-ятся; move блока реализован как remove старой parent edge плюс add новой с единственным winning parent; строки/ячейки таблицы имеют стабильные ID, а удаление строки tombstone-ит только causally observed descendants. Delete текста не уничтожает чужую concurrent insert без соответствующего causal context. Конфликтное перемещение или форматирование остаётся видимым в audit/UX, а не разрешается скрытым wall-clock timestamp. Клиент после reconnect отправляет version vector; сервер возвращает missing ops либо snapshot с frontier. Snapshotter сворачивает дерево, но garbage collection tombstone возможен только после causal stability всех активных replica и истечения offline-window.
+
+    При потере home-region control plane выдаёт новый epoch реплике с достигнутым durable frontier; fencing отвергает старый writer. Межрегиональный partition допускает локальное оптимистичное редактирование, но durable ack может замедлиться или перейти в явно обозначенный degraded mode. ACL хранится strongly consistent по document_id; операция со старой версией перепроверяется, а fan-out закрывает отозванные сессии. Индексатор читает committed log, строит ACL-aware search асинхронно; экспорт работает со snapshot конкретной версии. Presence отделён в lossy regional pub/sub. Наблюдаемость: local/remote apply latency, causal backlog, convergence hash mismatch, reconnect bytes, tombstone ratio, replication frontier, failover epoch, ACL rejection и hot-document fan-out. Аудит хранит автора, causal context и решение merge без раскрытия содержимого в метриках.
+  tradeoffs:
+    - "CRDT даёт офлайн и convergence, но расходует метаданные и усложняет семантику rich text."
+    - "Home-region упрощает durable order, но межрегиональные авторы платят latency."
+    - "Multi-master уменьшает latency partition-а, но усложняет ACL, GC и восстановление."
+    - "Вечные операции удобны для истории, snapshots и архив дешевле горячего хранения."
+    - "Строгий durable ack через зоны защищает RPO, но degraded mode требует честного UX."
+    - "Tombstone GC экономит место, но опасен до доказанной causal stability."
+  diagram: diagrams/collaborative-docs.gold.drawio
+rubric_overrides:
+  - "Кандидат задаёт конкретную CRDT-модель rich text и семантику concurrent insert/delete/format."
+  - "Обсуждаются causal context, reconnect и безопасный tombstone GC."
+  - "Региональный failover использует epoch/fencing и явно рассматривает split brain."
+  - "ACL version входит в протокол операции и отзыв сессий."
+  - "Durable edits и lossy presence масштабируются раздельно."

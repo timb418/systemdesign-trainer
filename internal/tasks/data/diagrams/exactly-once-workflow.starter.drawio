@@ -1,0 +1,14 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="starter" name="Исходная схема"><mxGraphModel dx="900" dy="500" grid="1"><root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="api" value="Workflow API" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="40" y="160" width="140" height="60" as="geometry"/></mxCell>
+    <mxCell id="queue" value="Очередь команд" style="shape=process;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="260" y="160" width="150" height="60" as="geometry"/></mxCell>
+    <mxCell id="worker" value="Worker" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="500" y="160" width="130" height="60" as="geometry"/></mxCell>
+    <mxCell id="external" value="Внешний платёжный API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;" vertex="1" parent="1"><mxGeometry x="720" y="70" width="160" height="60" as="geometry"/></mxCell>
+    <mxCell id="db" value="Таблица результатов" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="720" y="250" width="150" height="70" as="geometry"/></mxCell>
+    <mxCell id="e1" value="enqueue(command)" edge="1" parent="1" source="api" target="queue"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="at-least-once delivery" edge="1" parent="1" source="queue" target="worker"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="charge()" edge="1" parent="1" source="worker" target="external"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" value="write result" edge="1" parent="1" source="worker" target="db"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root></mxGraphModel></diagram>
+</mxfile>

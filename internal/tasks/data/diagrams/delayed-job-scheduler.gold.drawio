@@ -1,0 +1,22 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон"><mxGraphModel dx="1200" dy="800" grid="1"><root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="client" value="Клиенты scheduler API" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="20" y="180" width="150" height="60" as="geometry"/></mxCell>
+    <mxCell id="api" value="Job API&#xa;idempotency + CAS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1"><mxGeometry x="210" y="170" width="160" height="80" as="geometry"/></mxCell>
+    <mxCell id="store" value="Job Store RF=3&#xa;state + generation" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="430" y="40" width="160" height="80" as="geometry"/></mxCell>
+    <mxCell id="buckets" value="Time buckets&#xa;+ Timing Wheel" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="430" y="170" width="160" height="80" as="geometry"/></mxCell>
+    <mxCell id="scanner" value="Scanner leader&#xa;lease + fencing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" vertex="1" parent="1"><mxGeometry x="650" y="170" width="160" height="80" as="geometry"/></mxCell>
+    <mxCell id="ready" value="Partitioned Ready Queue" style="shape=process;whiteSpace=wrap;html=1;fillColor=#ffe6cc;" vertex="1" parent="1"><mxGeometry x="880" y="180" width="170" height="60" as="geometry"/></mxCell>
+    <mxCell id="workers" value="Workers&#xa;lease + heartbeat" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="880" y="340" width="160" height="70" as="geometry"/></mxCell>
+    <mxCell id="dlq" value="Retry / DLQ" style="shape=process;whiteSpace=wrap;html=1;fillColor=#f8cecc;" vertex="1" parent="1"><mxGeometry x="650" y="350" width="150" height="60" as="geometry"/></mxCell>
+    <mxCell id="e1" value="create / cancel / reschedule" edge="1" parent="1" source="client" target="api"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="transactional state + outbox" edge="1" parent="1" source="api" target="store"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="due_at, generation" edge="1" parent="1" source="api" target="buckets"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" value="scan due buckets" edge="1" parent="1" source="scanner" target="buckets"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e5" value="CAS SCHEDULED→ENQUEUED" edge="1" parent="1" source="scanner" target="store"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e6" value="job_id + generation" edge="1" parent="1" source="scanner" target="ready"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e7" value="pull ready job" edge="1" parent="1" source="workers" target="ready"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e8" value="completion CAS" edge="1" parent="1" source="workers" target="store"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e9" value="backoff / poison job" edge="1" parent="1" source="workers" target="dlq"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root></mxGraphModel></diagram>
+</mxfile>

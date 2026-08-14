@@ -1,0 +1,55 @@
+id: realtime-counters
+title: Счётчики в реальном времени
+difficulty: 1
+architecture_types:
+  - metrics
+  - key_value_store
+duration_min: 30
+canvas: blank
+prompt_public: |
+  Спроектируйте сервис счётчиков просмотров и лайков для контента.
+  Значения должны быстро обновляться и отображаться пользователям. Уточните допустимую точность и нагрузку.
+hidden:
+  functional:
+    - "Инкремент счётчика по object_id и типу события"
+    - "Чтение одного счётчика и batch-чтение для ленты"
+    - "Уникальный like/unlike пользователя без двойного учёта"
+    - "Получение top объектов за час и день"
+  nonfunctional:
+    - "p99 increment < 30 мс, batch read < 80 мс"
+    - "Просмотры могут отставать до 5 секунд и быть приблизительными на 0.5%"
+    - "Like count должен сходиться с уникальным состоянием пользователей"
+    - "Доступность записи 99.9%, потеря подтверждённого like недопустима"
+  scale:
+    - "500 млн объектов и 100 млн DAU"
+    - "Средняя нагрузка 300k событий/с, пик 1 млн/с"
+    - "Один вирусный объект получает до 200k increment/с"
+    - "Лента читает batch из 50 объектов, пик 150k batch reads/с"
+    - "Сырые события просмотров хранятся 7 дней"
+reveal_on_question:
+  - id: functional
+    keywords: ["инкремент", "чтени", "batch", "лайк", "unlike", "top", "функционал"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["latency", "точност", "приблиз", "отстав", "доступн", "потер", "консист"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["объект", "dau", "qps", "пик", "вирус", "batch", "retention", "масштаб"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    API предоставляет POST /events с event_id, object_id, type и actor_id, а GET /counters?ids=... возвращает batch. Требования разделяют два пути. Просмотр — commutative событие с допустимой погрешностью: gateway публикует его в partitioned log по object_id, stream workers локально агрегируют секунды и периодически делают merge в sharded counter store. Like — состояние множества: PUT /objects/{id}/likes/{user} и DELETE используют уникальный ключ (object_id,user_id) в durable store; изменение membership и outbox записываются транзакционно, а счётчик обновляется идемпотентной delta.
+
+    Обычный counter шардируется по hash(object_id). Вирусный ключ нельзя обновлять одной строкой, поэтому writer выбирает stripe hash(event_id) из N partial counters. Чтение суммирует stripes или получает собранное значение из Redis, которое aggregator обновляет каждые несколько секунд. Batch API группирует ключи по shard, параллельно запрашивает их и использует cache multi-get. Для top за окно stream processor поддерживает локальный heavy-hitter sketch, затем merge-ит кандидатов и уточняет точные значения; полный global sort не нужен.
+
+    Log реплицируется, consumer checkpoint гарантирует at-least-once. event_id и короткое dedupe-window уменьшают повторный учёт просмотров, а заявленная погрешность допускает sketches; like projection периодически сверяется с membership source of truth. При отказе Redis значения восстанавливаются из persistent partial counters и stream, чтение может временно отставать. Метрики включают ingestion lag, duplicate rate, hot-key stripe skew, cache hit, counter freshness, like reconciliation drift, batch fan-out и top precision. Алерт строится на возрасте данных и расхождении, а не только на доступности API.
+  tradeoffs:
+    - "Синхронный increment проще, но вирусный ключ создаёт contention; потоковый batch масштабируется ценой свежести."
+    - "Striped counter снимает hot key, но чтение требует sum или materialized cache."
+    - "Точные top требуют дорогой сортировки, sketches дают ограниченную погрешность."
+    - "Like как membership дороже простого increment, зато корректно поддерживает retry и unlike."
+  diagram: diagrams/realtime-counters.gold.drawio
+rubric_overrides:
+  - "Кандидат разделяет семантику приблизительных views и уникальных likes."
+  - "Горячий объект решён striped counters или эквивалентной техникой."
+  - "Batch read не превращается в 50 последовательных запросов."

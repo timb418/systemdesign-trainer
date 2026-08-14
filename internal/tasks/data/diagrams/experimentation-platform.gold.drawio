@@ -1,0 +1,26 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон"><mxGraphModel dx="1400" dy="900" grid="1"><root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="admin" value="Experiment Owners" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="20" y="60" width="150" height="60" as="geometry"/></mxCell>
+    <mxCell id="control" value="Control Plane&#xa;validation + namespaces" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1"><mxGeometry x="220" y="50" width="180" height="80" as="geometry"/></mxCell>
+    <mxCell id="config" value="Signed Config Snapshots" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="460" y="50" width="180" height="80" as="geometry"/></mxCell>
+    <mxCell id="sdk" value="Application SDK&#xa;immutable ranges + local assignment" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" vertex="1" parent="1"><mxGeometry x="700" y="40" width="200" height="90" as="geometry"/></mxCell>
+    <mxCell id="collector" value="Event Collector&#xa;schema + consent" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="700" y="220" width="180" height="80" as="geometry"/></mxCell>
+    <mxCell id="log" value="Exposure + Outcome Log" style="shape=process;whiteSpace=wrap;html=1;fillColor=#ffe6cc;" vertex="1" parent="1"><mxGeometry x="940" y="230" width="180" height="60" as="geometry"/></mxCell>
+    <mxCell id="guardrail" value="Realtime Guardrails&#xa;SRM + kill signal" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;" vertex="1" parent="1"><mxGeometry x="1180" y="210" width="190" height="90" as="geometry"/></mxCell>
+    <mxCell id="lake" value="Versioned Event Lake" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="940" y="390" width="180" height="80" as="geometry"/></mxCell>
+    <mxCell id="analysis" value="Analysis Pipeline&#xa;randomization-unit aggregate&#xa;cluster/sequential CI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;" vertex="1" parent="1"><mxGeometry x="680" y="375" width="220" height="100" as="geometry"/></mxCell>
+    <mxCell id="reports" value="Immutable Versioned Reports" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="450" y="390" width="190" height="80" as="geometry"/></mxCell>
+    <mxCell id="e1" value="create / approve experiment" edge="1" parent="1" source="admin" target="control"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="immutable config version" edge="1" parent="1" source="control" target="config"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="CDN delta + kill switch" edge="1" parent="1" source="config" target="sdk"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" value="actual exposure / outcome" edge="1" parent="1" source="sdk" target="collector"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e5" value="event_id durable append" edge="1" parent="1" source="collector" target="log"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e6" value="streaming allocation checks" edge="1" parent="1" source="log" target="guardrail"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e7" value="automatic stop request" edge="1" parent="1" source="guardrail" target="control"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e8" value="raw immutable partitions" edge="1" parent="1" source="log" target="lake"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e9" value="exposure/outcome datasets" edge="1" parent="1" source="lake" target="analysis"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e10" value="config + metric versions" edge="1" parent="1" source="config" target="analysis"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e11" value="estimate + CI + warnings" edge="1" parent="1" source="analysis" target="reports"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root></mxGraphModel></diagram>
+</mxfile>

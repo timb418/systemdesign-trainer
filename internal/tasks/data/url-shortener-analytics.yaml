@@ -1,0 +1,83 @@
+id: url-shortener-analytics
+title: Аналитика переходов коротких ссылок
+difficulty: 2
+architecture_types:
+  - url_shortener
+  - metrics
+  - queues
+duration_min: 40
+canvas: blank
+prompt_public: |
+  Спроектируйте аналитическую подсистему для сервиса коротких ссылок. Владелец хочет видеть свежие метрики и отчёты, не ухудшая редирект.
+hidden:
+  functional:
+    - "Собирать переходы с timestamp, referrer, country, device и link_id"
+    - "Показывать счётчик за последние 5 минут почти в реальном времени"
+    - "Строить почасовые и дневные отчёты за выбранный период"
+    - "Фильтровать ботов и дедуплицировать повторную доставку"
+    - "Экспортировать отчёт владельца в CSV"
+  nonfunctional:
+    - "Добавление события увеличивает p99 редиректа не более чем на 2 мс"
+    - "Дашборд доступен 99.9%, редирект не зависит от аналитики"
+    - "Допустимое расхождение свежего счётчика до 1%"
+    - "Персональные IP не хранятся дольше 24 часов"
+    - "Повторная обработка батча идемпотентна"
+  scale:
+    - "Пик 20k click events в секунду"
+    - "1 млрд событий в месяц"
+    - "Событие после обогащения около 350 байт"
+    - "Свежесть realtime-счётчика до 60 секунд"
+    - "Отчёты хранятся 13 месяцев, raw events — 30 дней"
+reveal_on_question:
+  - id: functional
+    keywords: ["click event", "realtime счётчик", "почасовой отчёт", "фильтрация ботов", "CSV export"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["overhead редиректа", "свежесть счётчика", "расхождение метрик", "retention IP", "идемпотентный batch"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["click events в секунду", "событий в месяц", "размер события", "raw retention", "срок отчётов"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    Redirect-процесс публикует минимальный ClickEvent с event_id; analytics API предоставляет /realtime, /timeseries и асинхронный /exports.
+    Авторизация проверяет ownership link_id, а тяжёлый экспорт возвращает job_id.
+    Модель данных.
+    Raw event включает event_id, link_id, occurred_at, coarse_ip, user_agent и referrer.
+    Поток обогащает country/device/bot_score; агрегаты ключуются link_id, time_bucket, dimension, value.
+    Export job хранит watermark и URI результата.
+    Основные потоки.
+    События попадают в Kafka, stream processor дедуплицирует event_id, обогащает справочниками и обновляет минутные агрегаты.
+    Raw sink пишет колонночное хранилище; compaction строит час/день.
+    API объединяет закрытые бакеты с текущей минутой.
+    Масштабирование.
+    Kafka делится по hash(link_id), но celebrity-ссылки дополнительно солятся и объединяются вторым шагом.
+    Колонночное хранилище партиционируется по дате и шардируется по link_id; экспорты идут через отдельный пул с квотами.
+    Согласованность.
+    At-least-once доставка компенсируется dedup state и идемпотентным upsert агрегата.
+    Watermark закрывает бакет после lateness, поздние события корректируют версии отчёта.
+    Realtime может отставать, зато итоговый дневной отчёт сходится.
+    Отказы и восстановление.
+    Если enrichment недоступен, событие сохраняется с unknown и переобрабатывается.
+    Backpressure не передаётся redirect: producer пишет в локальный ограниченный spool или семплирует диагностические поля.
+    Poison events уходят в DLQ с причиной.
+    Наблюдаемость.
+    Контролируются producer drop rate, Kafka lag по partition, watermark delay, доля дублей и late events, точность сверки raw против aggregates, latency запросов и экспортов.
+    Алерт на потери сравнивает sequence/volume между входом и sink.
+    Практические решения.
+    IP преобразуется в короткоживущий coarse prefix до долговременного хранения.
+    Approximate distinct для уникальных посетителей экономит память; точные total clicks остаются суммой дедуплицированных событий.
+    Боты помечаются, а не удаляются безвозвратно.
+  tradeoffs:
+    - "Kafka против прямой записи: изоляция redirect ценой операционной сложности"
+    - "Streaming против batch: свежесть до минуты ценой stateful processing"
+    - "Точные unique users против HyperLogLog: точность против памяти"
+    - "Солёный ключ hot link против порядка событий по link_id"
+    - "Хранение raw 30 дней против полного срока: расследования против стоимости"
+  diagram: diagrams/url-shortener-analytics.gold.drawio
+rubric_overrides:
+  - "Оценивается независимость редиректа от аналитического контура"
+  - "Кандидат должен разобрать at-least-once и дедупликацию"
+  - "Нужен ответ про hot partition популярной ссылки"
+  - "Realtime и финальные агрегаты должны иметь явную модель свежести"

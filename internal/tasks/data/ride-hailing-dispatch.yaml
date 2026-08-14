@@ -1,0 +1,61 @@
+id: ride-hailing-dispatch
+title: Диспетчеризация поездок такси
+difficulty: 4
+architecture_types:
+  - geo
+  - queues
+duration_min: 55
+canvas: blank
+prompt_public: |
+  В текущем наброске координаты водителей записываются в одну базу, а заказ ищет ближайшего водителя SQL-запросом. Спроектируйте диспетчеризацию поездок в городе под высокой нагрузкой.
+hidden:
+  functional:
+    - "Принимать доступность и позицию водителей"
+    - "Создавать запрос поездки с точками подачи и назначения"
+    - "Находить кандидатов и предлагать поездку с ограниченным сроком"
+    - "Гарантировать, что водитель не назначен двум активным поездкам"
+    - "Повторять поиск, отменять и переназначать при отказе или таймауте"
+  nonfunctional:
+    - "Первое предложение водителю создаётся за 2 секунды p95"
+    - "Назначение доступно 99.99%"
+    - "Двойное подтверждённое назначение недопустимо"
+    - "Позиция кандидата должна быть не старше 10 секунд"
+    - "Отказ одной зоны города не должен останавливать остальные зоны"
+  scale:
+    - "10 млн онлайн-водителей глобально"
+    - "Пик 200 тысяч новых запросов поездки в секунду"
+    - "Позиция каждого водителя обновляется раз в 3 секунды"
+    - "До 100 кандидатов рассматривается на запрос, предложение отправляется группами по 3"
+    - "500 городов, крупнейшая зона содержит 200 тысяч доступных водителей"
+reveal_on_question:
+  - id: functional
+    keywords: ["функционал", "водител", "позици", "заказ", "кандидат", "предлож", "назнач", "отказ", "таймаут"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["latency", "секунд", "доступн", "sla", "двойн", "консистент", "свежест", "зона", "отказ"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["qps", "нагрузк", "водител", "запрос", "обновлен", "кандидат", "город", "зона"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Driver Location Ingest принимает driver_id, availability, H3 cell, coordinates, timestamp и sequence. Последняя позиция хранится в региональном in-memory/KV индексе cell→drivers с TTL десять секунд; stream log питает восстановление и аналитику. Trip API создаёт trip_request с idempotency key и состоянием searching, после чего публикует команду в dispatch partition, выбранную по pickup zone. Один logical coordinator владеет trip через lease и fencing token, но сам не хранит глобальный список водителей.
+
+    Candidate Service расширяет кольца H3, исключает stale, busy, неподходящий класс и вычисляет pickup ETA через routing service. Ranking учитывает ETA, idle time, acceptance propensity и fairness, затем возвращает упорядоченный набор. Offer Manager резервирует группу из трёх водителей короткими conditional holds и отправляет push/WebSocket offer с offer_id, expiry и trip fencing token. Принятие проходит через strongly consistent Assignment Store: транзакция или compare-and-swap проверяет trip=searching, driver=held_for_this_trip и неистёкший offer, затем атомарно создаёт assignment и переводит driver в assigned. Только победитель получает подтверждение; поздние accept видят terminal conflict, остальные holds освобождаются.
+
+    При таймауте coordinator берёт следующую группу с увеличенным attempt. Отмена пассажира устанавливает terminal state с более высокой revision и инвалидирует offers. Если водитель пропал после назначения, отдельная policy может вернуть поездку в searching, сохранив audit предыдущего assignment. Локационный индекс eventual consistent и может предложить занятого водителя, но authoritative CAS не допускает двойного назначения. Зоны имеют отдельные очереди, quotas и worker pools; границы запрашивают соседние zones, а перегруженная зона не блокирует город. Durable state позволяет новому coordinator продолжить попытку по lease.
+
+    Наблюдаемость включает request-to-first-offer, request-to-match, candidate count/radius, stale-location rate, routing timeout, acceptance, expired offers, CAS conflicts, duplicate assignment invariant, zone queue age и fairness по водителям. Distributed trace по trip_id связывает ranking, offers и commit. Инвариантный монитор независимо сканирует активные assignments по driver_id, а алерты различают нехватку предложения и техническую задержку.
+  tradeoffs:
+    - "Рассылка одному водителю уменьшает конкурирующие offers, группы сокращают match latency ценой лишних уведомлений."
+    - "Геоиндекс eventual consistent быстр, authoritative assignment store обеспечивает строгий бизнес-инвариант."
+    - "Мелкие dispatch zones локализуют нагрузку, но поездки на границе требуют межзонного поиска."
+    - "Ранжирование только по ETA эффективно пассажиру, fairness и idle time уменьшают систематическое голодание водителей."
+    - "Центральный coordinator проще рассуждать, partition ownership с lease масштабирует города и требует fencing."
+    - "Предварительный hold снижает гонки, но временно уменьшает доступное предложение и нуждается в коротком TTL."
+  diagram: diagrams/ride-hailing-dispatch.gold.drawio
+rubric_overrides:
+  - "Кандидат должен отделить быстрый eventual geo-index от строго согласованного assignment commit."
+  - "Нужен явный state machine trip/offer/driver с TTL, late accept и cancellation races."
+  - "Оценивать zone partitioning, поиск через границы и изоляцию перегруженных зон."
+  - "Алгоритм ranking должен учитывать pickup ETA и fairness, а не только прямое расстояние."

@@ -1,0 +1,24 @@
+<mxfile host="app.diagrams.net"><diagram id="web-search" name="Эталон"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="frontier" value="Host-aware URL Frontier" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="20" y="40" width="150" height="60" as="geometry"/></mxCell>
+<mxCell id="fetch" value="Robots + Polite Fetchers" vertex="1" parent="1"><mxGeometry x="210" y="40" width="160" height="50" as="geometry"/></mxCell>
+<mxCell id="raw" value="Raw Page Store" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="410" y="0" width="130" height="60" as="geometry"/></mxCell>
+<mxCell id="parse" value="Parser + URL/Content Dedup" vertex="1" parent="1"><mxGeometry x="410" y="90" width="170" height="50" as="geometry"/></mxCell>
+<mxCell id="build" value="Index Builder + Manifest" vertex="1" parent="1"><mxGeometry x="630" y="90" width="160" height="50" as="geometry"/></mxCell>
+<mxCell id="idx" value="Versioned Inverted Shards" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="840" y="80" width="170" height="60" as="geometry"/></mxCell>
+<mxCell id="deny" value="Legal Removal Deny Service" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="840" y="190" width="180" height="60" as="geometry"/></mxCell>
+<mxCell id="user" value="Пользователь" vertex="1" parent="1"><mxGeometry x="210" y="260" width="110" height="50" as="geometry"/></mxCell>
+<mxCell id="broker" value="Query Broker" vertex="1" parent="1"><mxGeometry x="380" y="260" width="120" height="50" as="geometry"/></mxCell>
+<mxCell id="rank" value="Ranker + Snippet Builder" vertex="1" parent="1"><mxGeometry x="560" y="260" width="160" height="50" as="geometry"/></mxCell>
+<mxCell id="e1" value="scheduled by host" edge="1" parent="1" source="frontier" target="fetch"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e2" value="immutable raw" edge="1" parent="1" source="fetch" target="raw"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e3" value="HTTP page" edge="1" parent="1" source="fetch" target="parse"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e4" value="discovered links" edge="1" parent="1" source="parse" target="frontier"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e5" value="canonical safe docs" edge="1" parent="1" source="parse" target="build"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e6" value="atomic generation" edge="1" parent="1" source="build" target="idx"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e7" value="query" edge="1" parent="1" source="user" target="broker"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e8" value="scatter with deadline" edge="1" parent="1" source="broker" target="idx"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e9" value="top documents" edge="1" parent="1" source="idx" target="rank"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e10" value="deny before rank/snippet" edge="1" parent="1" source="rank" target="deny"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e11" value="filtered results" edge="1" parent="1" source="rank" target="user"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram></mxfile>

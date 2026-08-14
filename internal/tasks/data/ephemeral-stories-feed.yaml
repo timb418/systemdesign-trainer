@@ -1,0 +1,82 @@
+id: ephemeral-stories-feed
+title: Лента исчезающих историй
+difficulty: 3
+architecture_types:
+  - feed
+  - object_storage
+  - queues
+duration_min: 50
+canvas: blank
+prompt_public: |
+  Спроектируйте ленту Stories: медиа живёт 24 часа, порядок учитывает отношения, а просмотры и приватность должны быть корректны.
+hidden:
+  functional:
+    - "Публиковать фото/видео с автоматическим истечением"
+    - "Показывать кольца авторов и последовательность stories"
+    - "Отмечать просмотр и список зрителей владельцу"
+    - "Поддерживать close friends и блокировки"
+    - "Удалять историю досрочно во всех поверхностях"
+  nonfunctional:
+    - "Первая лента p99 менее 250 мс"
+    - "Медиа стартует p95 менее 500 мс через CDN"
+    - "Истёкший контент недоступен не позднее 60 секунд"
+    - "Список зрителей допускает задержку 10 секунд"
+    - "Privacy block применяется за 5 секунд"
+  scale:
+    - "80 млн DAU"
+    - "25 млн uploads в сутки"
+    - "Пик feed reads 300k QPS"
+    - "Средний media object 8 МБ"
+    - "Viewer events 2 млрд в сутки, TTL raw 48 часов"
+reveal_on_question:
+  - id: functional
+    keywords: ["publish story", "author rings", "viewer list", "close friends", "early delete"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["story feed p99", "media start p95", "expiry delay", "privacy block", "viewer freshness"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["stories DAU", "uploads per day", "feed read QPS", "media object size", "viewer events"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    CreateStory выдаёт presigned upload и finalize token; GET /stories/feed возвращает author groups и signed media URLs.
+    View API идемпотентен по viewer/story, viewer-list доступен только owner.
+    Модель данных.
+    Metadata содержит story_id, author, object_key, created_at, expires_at, audience_version и status.
+    Author ring индекс хранит latest_unseen_at; viewer set использует точное membership для UI и отдельные агрегаты.
+    Основные потоки.
+    Клиент грузит медиа напрямую в object storage, scanner/transcoder завершает finalize.
+    Fanout обновляет candidate authors; read фильтрует expiry/privacy и подписывает CDN URL.
+    View event обновляет unseen state асинхронно.
+    Масштабирование.
+    Metadata и ring index шардируются по user_id, media раздаётся CDN.
+    Popular author не fanout-ит каждый story ID — подписчики хранят author reference и читают outbox.
+    Expiry wheel пакетно выпускает tombstones.
+    Согласованность.
+    Finalize атомарно переводит pending в active после media-ready.
+    Audience snapshot фиксируется при публикации, но block имеет приоритет текущего состояния.
+    View at-least-once дедуплицируется составным ключом.
+    Отказы и восстановление.
+    Незавершённый upload удаляется lifecycle rule.
+    При lag expiry read path всегда проверяет expires_at. Signed URL несёт story_id и audience epoch, живёт не более пяти секунд, а privacy/delete deny stream немедленно обновляет edge deny set, поэтому уже выданный URL перестаёт работать в пределах privacy SLO.
+    Scanner failure оставляет story pending и сообщает автору.
+    Наблюдаемость.
+    Метрики upload finalize rate, transcode lag, feed p99, expired-read attempts, CDN start latency, view dedup rate, privacy propagation и orphan objects.
+    Synthetic story проходит publish-view-expire сценарий.
+    Практические решения.
+    Физическое удаление object может отставать от логической недоступности; edge проверяет подпись и актуальный deny epoch до cache response, а короткий URL ограничивает окно при потере deny stream.
+    Viewer list пагинируется и не строится синхронным счётчиком на горячей строке.
+  tradeoffs:
+    - "Fanout story IDs против author references для популярных авторов"
+    - "Точный viewer set против approximate count"
+    - "Audience snapshot против текущего ACL"
+    - "Короткий signed URL против CDN hit ratio"
+    - "TTL storage lifecycle против немедленного delete"
+  diagram: diagrams/ephemeral-stories-feed.gold.drawio
+rubric_overrides:
+  - "Оценивается различие логического expiry и физического удаления"
+  - "Privacy/block должен обходить CDN cache"
+  - "Нужна идемпотентность view events"
+  - "Кандидат должен решить hot author и viewer list"

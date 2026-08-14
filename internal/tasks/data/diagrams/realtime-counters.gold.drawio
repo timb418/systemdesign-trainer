@@ -1,0 +1,22 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон"><mxGraphModel dx="1200" dy="800" grid="1"><root>
+    <mxCell id="0"/><mxCell id="1" parent="0"/>
+    <mxCell id="apps" value="Приложения / Лента" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="20" y="180" width="150" height="60" as="geometry"/></mxCell>
+    <mxCell id="api" value="Counter API&#xa;batch multi-get" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1"><mxGeometry x="220" y="170" width="150" height="80" as="geometry"/></mxCell>
+    <mxCell id="log" value="Event Log RF=3" style="shape=process;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="430" y="60" width="150" height="60" as="geometry"/></mxCell>
+    <mxCell id="aggregator" value="Stream Aggregator&#xa;batch + dedupe window" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" vertex="1" parent="1"><mxGeometry x="430" y="170" width="180" height="90" as="geometry"/></mxCell>
+    <mxCell id="stripes" value="Striped Persistent Counters" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="680" y="50" width="180" height="80" as="geometry"/></mxCell>
+    <mxCell id="cache" value="Materialized Redis Cache" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#ffe6cc;" vertex="1" parent="1"><mxGeometry x="680" y="180" width="180" height="80" as="geometry"/></mxCell>
+    <mxCell id="likes" value="Unique Like Membership" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#e1d5e7;" vertex="1" parent="1"><mxGeometry x="220" y="350" width="170" height="80" as="geometry"/></mxCell>
+    <mxCell id="top" value="Heavy-hitter Top Service" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="680" y="350" width="180" height="60" as="geometry"/></mxCell>
+    <mxCell id="e1" value="view event_id" edge="1" parent="1" source="apps" target="api"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e2" value="durable append" edge="1" parent="1" source="api" target="log"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e3" value="partitioned events" edge="1" parent="1" source="log" target="aggregator"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e4" value="partial stripe deltas" edge="1" parent="1" source="aggregator" target="stripes"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e5" value="fresh summed value" edge="1" parent="1" source="aggregator" target="cache"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e6" value="batch counter read" edge="1" parent="1" source="api" target="cache"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e7" value="PUT/DELETE user like" edge="1" parent="1" source="api" target="likes"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e8" value="idempotent like delta" edge="1" parent="1" source="likes" target="log"><mxGeometry relative="1" as="geometry"/></mxCell>
+    <mxCell id="e9" value="local sketch candidates" edge="1" parent="1" source="aggregator" target="top"><mxGeometry relative="1" as="geometry"/></mxCell>
+  </root></mxGraphModel></diagram>
+</mxfile>

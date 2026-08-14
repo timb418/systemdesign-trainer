@@ -1,0 +1,28 @@
+<mxfile host="app.diagrams.net"><diagram id="eta" name="Эталон"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="client" value="Trip Client" vertex="1" parent="1"><mxGeometry x="20" y="80" width="100" height="50" as="geometry"/></mxCell>
+<mxCell id="route" value="Route API" vertex="1" parent="1"><mxGeometry x="170" y="80" width="100" height="50" as="geometry"/></mxCell>
+<mxCell id="worker" value="Routing Workers" vertex="1" parent="1"><mxGeometry x="320" y="80" width="120" height="50" as="geometry"/></mxCell>
+<mxCell id="graph" value="Road Graph Partitions" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="490" y="20" width="150" height="60" as="geometry"/></mxCell>
+<mxCell id="overlay" value="Live Traffic Overlay" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="490" y="130" width="150" height="60" as="geometry"/></mxCell>
+<mxCell id="ingest" value="GPS Probe Ingest" vertex="1" parent="1"><mxGeometry x="170" y="230" width="130" height="50" as="geometry"/></mxCell>
+<mxCell id="stream" value="Traffic Aggregator" style="shape=process" vertex="1" parent="1"><mxGeometry x="350" y="220" width="140" height="60" as="geometry"/></mxCell>
+<mxCell id="model" value="ETA Model" vertex="1" parent="1"><mxGeometry x="700" y="80" width="110" height="50" as="geometry"/></mxCell>
+<mxCell id="history" value="Historical Speed Profiles" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="680" y="170" width="170" height="60" as="geometry"/></mxCell>
+<mxCell id="closures" value="Trusted Closure Fast Path" style="shape=process" vertex="1" parent="1"><mxGeometry x="520" y="240" width="160" height="60" as="geometry"/></mxCell>
+<mxCell id="session" value="Active Trip Session&#xa;sequence + route version" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="850" y="20" width="170" height="70" as="geometry"/></mxCell>
+<mxCell id="fast" value="Corridor Fast ETA / Reroute" vertex="1" parent="1"><mxGeometry x="860" y="130" width="170" height="60" as="geometry"/></mxCell>
+<mxCell id="e1" value="origin destination" edge="1" parent="1" source="client" target="route"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e2" value="candidate paths" edge="1" parent="1" source="route" target="worker"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e3" value="topology partitions" edge="1" parent="1" source="worker" target="graph"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e4" value="fresh edge weights" edge="1" parent="1" source="worker" target="overlay"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e5" value="GPS observations" edge="1" parent="1" source="ingest" target="stream"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e6" value="versioned speed deltas" edge="1" parent="1" source="stream" target="overlay"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e7" value="path features" edge="1" parent="1" source="worker" target="model"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e8" value="duration confidence" edge="1" parent="1" source="model" target="route"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e9" value="baseline weights" edge="1" parent="1" source="history" target="worker"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e10" value="priority closure deltas" edge="1" parent="1" source="closures" target="overlay"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e11" value="position + previous route" edge="1" parent="1" source="client" target="session"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e12" value="monotonic update" edge="1" parent="1" source="session" target="fast"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e13" value="remaining weights / off-corridor reroute" edge="1" parent="1" source="fast" target="worker"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram></mxfile>

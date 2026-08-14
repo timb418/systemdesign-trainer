@@ -1,0 +1,22 @@
+<mxfile host="app.diagrams.net"><diagram id="gold" name="Эталон"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="user" value="Traveler App" vertex="1" parent="1"><mxGeometry x="20" y="230" width="130" height="60" as="geometry"/></mxCell>
+<mxCell id="search" value="Hotel Search Index" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="200" y="80" width="150" height="80" as="geometry"/></mxCell>
+<mxCell id="book" value="Booking API" vertex="1" parent="1"><mxGeometry x="210" y="250" width="130" height="60" as="geometry"/></mxCell>
+<mxCell id="inv" value="Authoritative Nightly Inventory DB" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="420" y="240" width="210" height="80" as="geometry"/></mxCell>
+<mxCell id="timer" value="Expiry Queue + Sweeper" style="shape=process" vertex="1" parent="1"><mxGeometry x="430" y="430" width="180" height="60" as="geometry"/></mxCell>
+<mxCell id="pay" value="Payment Service" vertex="1" parent="1"><mxGeometry x="690" y="250" width="150" height="60" as="geometry"/></mxCell>
+<mxCell id="supplier" value="Supplier Feed" vertex="1" parent="1"><mxGeometry x="420" y="40" width="140" height="60" as="geometry"/></mxCell>
+<mxCell id="ingest" value="Versioned Supplier Ingestion Log" style="shape=process" vertex="1" parent="1"><mxGeometry x="640" y="40" width="200" height="60" as="geometry"/></mxCell>
+<mxCell id="saga" value="Confirm / Refund Saga" vertex="1" parent="1"><mxGeometry x="900" y="250" width="160" height="60" as="geometry"/></mxCell>
+<mxCell id="e1" value="stale-tolerant search" edge="1" parent="1" source="user" target="search"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e2" value="offer token / hold" edge="1" parent="1" source="user" target="book"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e3" value="atomic all-night CAS" edge="1" parent="1" source="book" target="inv"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e4" value="expires_at" edge="1" parent="1" source="inv" target="timer"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e5" value="payment intent" edge="1" parent="1" source="book" target="pay"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e6" value="webhook" edge="1" parent="1" source="pay" target="saga"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e7" value="confirm / release CAS" edge="1" parent="1" source="saga" target="inv"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e8" value="supplier_version events" edge="1" parent="1" source="supplier" target="ingest"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e9" value="authoritative quota / rates" edge="1" parent="1" source="ingest" target="inv"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e10" value="denormalized search update" edge="1" parent="1" source="ingest" target="search"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram></mxfile>

@@ -1,0 +1,86 @@
+id: cloud-drive-sync
+title: Синхронизация облачного диска
+difficulty: 3
+architecture_types:
+  - object_storage
+  - queues
+  - collab_editing
+duration_min: 55
+canvas: blank
+prompt_public: |
+  Спроектируйте облачный диск с синхронизацией папок между устройствами, офлайн-изменениями, конфликтами и общими файлами.
+hidden:
+  functional:
+    - "Загружать и скачивать файлы по частям"
+    - "Синхронизировать rename/move/delete между устройствами"
+    - "Работать offline и разрешать конфликты"
+    - "Делиться файлом или папкой с ACL"
+    - "Восстанавливать удалённое из корзины"
+  nonfunctional:
+    - "Изменение metadata видно другим устройствам за 3 секунды"
+    - "p99 delta sync менее 300 мс"
+    - "Файлы до 100 ГБ"
+    - "Ни один принятый offline edit не теряется молча"
+    - "Удалённая ACL блокирует download за 10 секунд"
+  scale:
+    - "25 млн DAU и 90 млн устройств"
+    - "10 млрд metadata objects"
+    - "Пик 100k metadata ops/с"
+    - "Ingress/egress по 80 Гбит/с"
+    - "Delta log хранит 30 дней, корзина — 30 дней"
+reveal_on_question:
+  - id: functional
+    keywords: ["resumable file transfer", "rename move delete", "offline conflict", "shared folder ACL", "trash restore"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["metadata freshness", "delta sync p99", "offline edit durability", "ACL revoke latency", "large file"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["drive DAU", "device count", "metadata objects", "metadata ops", "delta retention"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    Clients используют resumable upload, затем CommitFile с parent_id, base_version и content_ref. Download API сначала проверяет effective ACL epoch и выдаёт короткий URL, подписанный отдельным Download Signer.
+    Delta API читает user/workspace change cursor; snapshot требуется при слишком старом cursor.
+    Модель данных.
+    Node имеет stable id, parent, name, content version, vector/base revision, tombstone и ACL epoch.
+    Blob immutable и content-addressed внутри tenant.
+    Change log хранит metadata op и resulting revision.
+    Основные потоки.
+    Upload blob завершается до metadata commit.
+    Transaction проверяет base_version и уникальность имени, пишет node/outbox; sync service доставляет delta.
+    Concurrent content edits создают conflict copy, а совместимые move/rename применяются по правилам.
+    Масштабирование.
+    Metadata шардируется по workspace, blobs — по hash.
+    Большая shared folder разбивается на directory partitions с coordinator для rename.
+    Clients получают batch deltas и lazy скачивают content.
+    Согласованность.
+    Workspace revision упорядочивает metadata, но offline edits несут base_version.
+    Delete — tombstone; stale client не может воскресить без explicit restore.
+    ACL change транзакционно повышает epoch и публикует revoke event. Download Signer сверяет текущий epoch перед каждой выдачей, а blob gateway/CDN проверяет token epoch по локальному revoke cache до отдачи данных, поэтому уже выданный URL закрывается за 10 секунд.
+    Отказы и восстановление.
+    Если cursor старше retention, Snapshot Builder читает metadata DB на фиксированной revision, сохраняет manifest, а Delta Service отдаёт client manifest плюс tail после этой revision.
+    Duplicate op дедуплицируется device_id/op_id.
+    Partial blob без metadata становится orphan; reconciler удаляет после grace.
+    Наблюдаемость.
+    Метрики sync lag, conflict rate, cursor-too-old, orphan bytes, metadata transaction retries, ACL revoke latency, hot directories и snapshot duration.
+    End-to-end probes меняют файл на двух devices.
+    Практические решения.
+    Rename не копирует blob.
+    Sharing наследование ACL кэшируется с epoch.
+    Quota резервируется перед upload и окончательно списывается при commit, чтобы параллельные uploads не превышали план.
+  tradeoffs:
+    - "Last-write-wins против conflict copy"
+    - "Глобальный log против workspace revision"
+    - "Content-addressing против privacy leakage"
+    - "Наследуемый ACL против materialized permissions"
+    - "Длинный delta retention против snapshot cost"
+    - "Strong directory uniqueness против availability"
+  diagram: diagrams/cloud-drive-sync.gold.drawio
+rubric_overrides:
+  - "Кандидат должен разобрать offline base_version conflicts"
+  - "Оценивается delta cursor и snapshot fallback"
+  - "ACL revoke обязан закрыть signed download"
+  - "Metadata commit отделяется от blob upload"
+  - "Нужна очистка orphan blobs"

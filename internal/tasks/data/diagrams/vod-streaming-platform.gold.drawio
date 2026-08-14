@@ -1,0 +1,19 @@
+<mxfile host="app.diagrams.net"><diagram id="vod" name="Эталон"><mxGraphModel><root>
+<mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="player" value="Video Player" vertex="1" parent="1"><mxGeometry x="20" y="100" width="110" height="50" as="geometry"/></mxCell>
+<mxCell id="play" value="Playback Service" vertex="1" parent="1"><mxGeometry x="180" y="20" width="130" height="50" as="geometry"/></mxCell>
+<mxCell id="ent" value="Entitlement Service" vertex="1" parent="1"><mxGeometry x="360" y="20" width="140" height="50" as="geometry"/></mxCell>
+<mxCell id="cdn" value="Global CDN" vertex="1" parent="1"><mxGeometry x="180" y="130" width="110" height="50" as="geometry"/></mxCell>
+<mxCell id="shield" value="Origin Shield" vertex="1" parent="1"><mxGeometry x="350" y="130" width="120" height="50" as="geometry"/></mxCell>
+<mxCell id="media" value="Multi-region Media Store" style="shape=cylinder3" vertex="1" parent="1"><mxGeometry x="520" y="120" width="160" height="60" as="geometry"/></mxCell>
+<mxCell id="drm" value="DRM License Service" vertex="1" parent="1"><mxGeometry x="350" y="230" width="150" height="50" as="geometry"/></mxCell>
+<mxCell id="events" value="QoE Event Pipeline" style="shape=process" vertex="1" parent="1"><mxGeometry x="180" y="240" width="140" height="60" as="geometry"/></mxCell>
+<mxCell id="e1" value="create session" edge="1" parent="1" source="player" target="play"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e2" value="check subscription" edge="1" parent="1" source="play" target="ent"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e3" value="signed manifest" edge="1" parent="1" source="play" target="player"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e4" value="manifest and segments" edge="1" parent="1" source="player" target="cdn"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e5" value="cache miss" edge="1" parent="1" source="cdn" target="shield"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e6" value="immutable objects" edge="1" parent="1" source="shield" target="media"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e7" value="license challenge" edge="1" parent="1" source="player" target="drm"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e8" value="batched beacons" edge="1" parent="1" source="player" target="events"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram></mxfile>

@@ -1,0 +1,88 @@
+id: object-storage-s3
+title: Распределённое объектное хранилище
+difficulty: 4
+architecture_types:
+  - object_storage
+  - key_value_store
+  - distributed_cache
+duration_min: 60
+canvas: sketch
+starter_diagram: diagrams/object-storage-s3.starter.drawio
+prompt_public: |
+  Перед вами один metadata-сервер и один файловый массив. Превратите систему в S3-подобное хранилище с multipart, высокой долговечностью и масштабируемым listing.
+hidden:
+  functional:
+    - "PUT/GET/DELETE object и HEAD metadata"
+    - "Multipart upload с abort и complete"
+    - "List objects по prefix с continuation token"
+    - "Versioning и conditional write по ETag"
+    - "Lifecycle переход в cold tier"
+  nonfunctional:
+    - "Долговечность 99.999999999%"
+    - "Доступность GET 99.99%, PUT 99.9%"
+    - "Read-after-write для нового object и overwrite"
+    - "Metadata p99 менее 100 мс"
+    - "Потеря зоны не теряет подтверждённые объекты"
+  scale:
+    - "100 ПБ данных и 100 млрд objects"
+    - "Пик 2 млн GET/с и 300k PUT/с"
+    - "Объекты от 1 КБ до 5 ТБ"
+    - "3 availability zones"
+    - "Listing до 1 млрд keys в bucket"
+reveal_on_question:
+  - id: functional
+    keywords: ["PUT GET DELETE", "multipart upload", "prefix listing", "object versioning", "cold lifecycle"]
+    reveal: ["hidden.functional"]
+  - id: nonfunctional
+    keywords: ["eleven nines", "GET availability", "read after write", "metadata p99", "zone loss"]
+    reveal: ["hidden.nonfunctional"]
+  - id: scale
+    keywords: ["petabytes stored", "object count", "GET PUT rate", "object size", "keys per bucket"]
+    reveal: ["hidden.scale"]
+preferred_solution:
+  narrative: |
+    Контракт и границы.
+    Gateway реализует S3-подобные APIs, а auth подписывает canonical request.
+    PUT получает placement plan и streaming checksum; CompleteMultipart атомарно публикует manifest.
+    List token кодирует snapshot revision и последний логический key; текущий metadata router заново находит range, поэтому split/merge partitions не ломает продолжение.
+    Модель данных.
+    Strongly consistent metadata хранит bucket/key/version, manifest, etag, size и policy.
+    Chunks immutable с content checksum и erasure stripe.
+    Namespace index отсортирован bucket/prefix/key; multipart parts невидимы до complete.
+    Основные потоки.
+    PUT получает у placement service план, после чего gateway напрямую stream-ит chunks data nodes. Для больших объектов stripe использует Reed–Solomon 6+3: по три fragment в каждой из трёх AZ, а commit требует все девять durable fragments (с заменой медленного node внутри AZ); затем metadata commit делает version видимой.
+    GET читает manifest и ближайшие fragments, repair-on-read чинит повреждение.
+    Delete создаёт versioned tombstone.
+    Масштабирование.
+    Metadata range-partitioned по bucket/key и автоматически split; огромный bucket получает many partitions.
+    Data nodes распределены по rack/AZ failure domains. Большие объекты используют EC 6+3, малые/hot — три полные реплики по одной на AZ; durability model включает независимый bit rot, scrub interval, repair backlog и correlated zone-loss drills.
+    List идёт по snapshot token.
+    Согласованность.
+    Metadata consensus обеспечивает read-after-write и conditional ETag.
+    Data commit предшествует metadata visibility; orphan fragments безопасно собираются позже.
+    List snapshot фиксирует revision, поэтому split partitions не создают дублей.
+    Отказы и восстановление.
+    Потеря data node реконструируется в фоне с priority для under-protected stripes.
+    Если quorum metadata недоступен, PUT закрывается, GET может читать подтверждённый manifest replica.
+    Bit rot выявляет scrub checksums.
+    Наблюдаемость.
+    Контролируются durability risk по failure domain, under-replicated bytes, repair backlog, metadata split/load, PUT stages, orphan fragments, list latency и checksum failures.
+    Fault injection теряет node и целую зону.
+    Практические решения.
+    Стартовые single metadata и disk array заменяются независимыми control/data planes.
+    Capacity rebalance использует throttling.
+    Lifecycle создаёт новую placement class и удаляет старую только после verified copy.
+  tradeoffs:
+    - "Тройная репликация против erasure coding"
+    - "Strong metadata против доступности при partition"
+    - "Range partition namespace против hash и дорогого listing"
+    - "Малые chunks против metadata overhead"
+    - "Синхронная cross-zone durability против PUT latency"
+    - "Repair-on-read против только background scrub"
+  diagram: diagrams/object-storage-s3.gold.drawio
+rubric_overrides:
+  - "Кандидат обязан устранить обе single points стартовой схемы"
+  - "Оценивается атомарность data write и metadata publish"
+  - "Listing должен масштабироваться и иметь стабильный token"
+  - "Нужно обсудить failure domains, EC и repair"
+  - "Multipart parts не видны до Complete"
