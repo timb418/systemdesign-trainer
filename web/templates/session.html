@@ -9,7 +9,7 @@
       <span id="timer" class="timer"></span>
       <span id="usage" class="usage">{{if gt .Session.PromptTokens 0}}{{.Session.PromptTokens}}+{{.Session.CompletionTokens}} ток.{{if gt .Session.Cost 0.0}} · ${{printf "%.4f" .Session.Cost}}{{end}}{{end}}</span>
       {{if ne .Session.Mode.String "requirements_only"}}
-      <button type="button" id="show-board">Показать доску интервьюеру</button>
+      <button type="button" id="show-board" title="Интервьюер не видит холст. Уходит текстовая схема узлов и связей.">Показать доску интервьюеру</button>
       {{end}}
       {{if eq .Session.Status "in_progress"}}
       <form method="post" action="/sessions/{{.Session.ID}}/complete">
@@ -24,10 +24,22 @@
     <div class="chat-col">
       <div id="chat" class="chat">
         {{range .Messages}}
+        {{if isBoardShare .Content}}
+        <article class="msg event">
+          <h3>Доска показана интервьюеру</h3>
+          <p class="event-lead">Интервьюер не видит картинку — только текстовую схему из узлов и стрелок.</p>
+          <p class="meta">{{boardShareMeta .Content}}</p>
+          <details>
+            <summary>Что увидел интервьюер</summary>
+            <pre class="board-dump">{{boardShareDump .Content}}</pre>
+          </details>
+        </article>
+        {{else}}
         <article class="msg {{.Role}}">
           <h3>{{if eq .Role "user"}}Вы{{else if eq .Role "assistant"}}Интервьюер{{else}}Система{{end}}</h3>
           <div class="body">{{.Content}}</div>
         </article>
+        {{end}}
         {{end}}
       </div>
       {{if eq .Session.Status "in_progress"}}

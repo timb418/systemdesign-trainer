@@ -22,6 +22,50 @@
     return art.querySelector(".body");
   }
 
+  function ruCount(n, one, few, many) {
+    const n100 = n % 100;
+    let word = many;
+    if (n100 < 11 || n100 > 14) {
+      const n10 = n % 10;
+      if (n10 === 1) word = one;
+      else if (n10 >= 2 && n10 <= 4) word = few;
+    }
+    return n + " " + word;
+  }
+
+  function appendBoardEvent(dump, nodes, edges) {
+    const art = document.createElement("article");
+    art.className = "msg event";
+    const h3 = document.createElement("h3");
+    h3.textContent = "Доска показана интервьюеру";
+    const lead = document.createElement("p");
+    lead.className = "event-lead";
+    lead.textContent = "Интервьюер не видит картинку — только текстовую схему из узлов и стрелок.";
+    const meta = document.createElement("p");
+    meta.className = "meta";
+    if (typeof nodes === "number" && typeof edges === "number") {
+      meta.textContent = ruCount(nodes, "узел", "узла", "узлов") + ", " + ruCount(edges, "связь", "связи", "связей");
+    } else {
+      meta.textContent = String(dump || "").split("\n")[0] || "текстовая схема";
+    }
+    art.appendChild(h3);
+    art.appendChild(lead);
+    art.appendChild(meta);
+    if (dump) {
+      const details = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = "Что увидел интервьюер";
+      const pre = document.createElement("pre");
+      pre.className = "board-dump";
+      pre.textContent = dump;
+      details.appendChild(summary);
+      details.appendChild(pre);
+      art.appendChild(details);
+    }
+    chat.appendChild(art);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
   if (form) {
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -117,7 +161,7 @@
         body: JSON.stringify({ xml: msg.xml, show: true }),
       }).then(async (r) => {
         const data = await r.json().catch(() => ({}));
-        if (data.dump) appendMsg("system", "Показана доска:\n" + data.dump);
+        if (data.shown || data.dump) appendBoardEvent(data.dump, data.nodes, data.edges);
         if (data.reply) appendMsg("assistant", data.reply);
       });
     }

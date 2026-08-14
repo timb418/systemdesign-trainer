@@ -37,7 +37,10 @@ func New(bank *tasks.Bank, st *store.Store, set *settings.Store, agents *trainer
 	pages := []string{"catalog.html", "task.html", "session.html", "settings.html", "history.html", "rubric.html", "compare.html", "error.html"}
 	for _, p := range pages {
 		t, err := template.New("").Funcs(template.FuncMap{
-			"join": strings.Join,
+			"join":           strings.Join,
+			"isBoardShare":   isBoardShare,
+			"boardShareDump": boardShareDump,
+			"boardShareMeta": boardShareMeta,
 		}).ParseFS(webassets.FS, "templates/base.html", "templates/"+p)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", p, err)
@@ -339,7 +342,13 @@ func (s *Server) postBoard(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"dump": dump, "reply": reply})
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"shown": true,
+			"dump":  dump,
+			"nodes": len(topo.Nodes),
+			"edges": len(topo.Edges),
+			"reply": reply,
+		})
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
