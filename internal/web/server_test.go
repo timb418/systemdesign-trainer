@@ -1,6 +1,8 @@
 package web_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -182,5 +184,60 @@ func TestSettingsRejectsNoneEffort(t *testing.T) {
 	}
 	if !strings.Contains(html, `value="high" selected`) && !strings.Contains(html, `value="high"  selected`) {
 		t.Fatalf("none should fall back to high: %s", html)
+	}
+}
+
+func TestPostBoardShowStreamsShownEvent(t *testing.T) {
+	h := testServer(t)
+	ts := httptest.NewServer(h)
+	t.Cleanup(ts.Close)
+	client := ts.Client()
+
+	form := url.Values{"task_id": {"url-shortener-v1"}, "mode": {"full_mock"}}
+	res, err := client.PostForm(ts.URL+"/sessions", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loc := res.Request.URL.Path
+	res.Body.Close()
+	if res.StatusCode != 200 || !strings.Contains(loc, "/sessions/") {
+		t.Fatalf("start %d loc=%s", res.StatusCode, loc)
+	}
+
+	xml := `<mxfile><diagram><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="API" vertex="1" parent="1"/><mxCell id="3" value="DB" vertex="1" parent="1"/><mxCell id="4" edge="1" source="2" target="3" parent="1"/></root></mxGraphModel></diagram></mxfile>`
+	payload, err := json.Marshal(map[string]any{"xml": xml, "show": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequest(http.MethodPost, ts.URL+loc+"/board", bytes.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	res, err = client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatalf("board show %d", res.StatusCode)
+	}
+	if ct := res.Header.Get("Content-Type"); !strings.Contains(ct, "text/event-stream") {
+		t.Fatalf("content-type %s", ct)
+	}
+	raw, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	if !strings.Contains(text, `"type":"shown"`) {
+		t.Fatalf("missing shown event: %s", text)
+	}
+	if !strings.Contains(text, `"dump"`) {
+		t.Fatalf("missing dump: %s", text)
+	}
+	if !strings.Contains(text, "2 узла") || !strings.Contains(text, "1 связь") {
+		t.Fatalf("dump missing node/edge counts: %s", text)
 	}
 }

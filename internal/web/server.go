@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -255,17 +256,24 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = s.store.AddMessage(r.Context(), store.Message{SessionID: sess.ID, Role: "user", Content: body.Content})
 	history, _ := s.store.ListMessages(r.Context(), sess.ID)
+	s.streamInterview(r.Context(), startSSE(w), sess, t, history[:len(history)-1], body.Content)
+}
+
+func startSSE(w http.ResponseWriter) func(any) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	flusher, _ := w.(http.Flusher)
-	writeEvt := func(v any) {
+	return func(v any) {
 		b, _ := json.Marshal(v)
 		fmt.Fprintf(w, "data: %s\n\n", b)
 		if flusher != nil {
 			flusher.Flush()
 		}
 	}
-	text, usage, err := s.agents.Interview(r.Context(), sess, t, history[:len(history)-1], body.Content, func(tok string) {
+}
+
+func (s *Server) streamInterview(ctx context.Context, writeEvt func(any), sess store.Session, t tasks.Task, history []store.Message, userText string) {
+	text, usage, err := s.agents.Interview(ctx, sess, t, history, userText, func(tok string) {
 		writeEvt(map[string]any{"type": "token", "text": tok})
 	})
 	if err != nil {
@@ -276,7 +284,7 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
 		text = "…"
 		writeEvt(map[string]any{"type": "token", "text": text})
 	}
-	_, _ = s.store.AddMessage(r.Context(), store.Message{
+	_, _ = s.store.AddMessage(ctx, store.Message{
 		SessionID:        sess.ID,
 		Role:             "assistant",
 		Content:          text,
@@ -284,7 +292,7 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
 		CompletionTokens: usage.CompletionTokens,
 		Cost:             usage.Cost,
 	})
-	updated, _ := s.store.GetSession(r.Context(), sess.ID)
+	updated, _ := s.store.GetSession(ctx, sess.ID)
 	writeEvt(map[string]any{"type": "usage", "label": usageLabel(updated)})
 }
 
@@ -328,27 +336,20 @@ func (s *Server) postBoard(w http.ResponseWriter, r *http.Request) {
 		dump := topo.Human()
 		msg := "Кандидат показал доску. Каноническая проекция:\n" + dump
 		_, _ = s.store.AddMessage(r.Context(), store.Message{SessionID: sess.ID, Role: "user", Content: msg})
-		reply := ""
-		t, ok := s.bank.Get(sess.TaskID)
-		if ok {
-			history, _ := s.store.ListMessages(r.Context(), sess.ID)
-			text, usage, err := s.agents.Interview(r.Context(), sess, t, history[:len(history)-1], msg, nil)
-			if err == nil && text != "" {
-				reply = text
-				_, _ = s.store.AddMessage(r.Context(), store.Message{
-					SessionID: sess.ID, Role: "assistant", Content: reply,
-					PromptTokens: usage.PromptTokens, CompletionTokens: usage.CompletionTokens, Cost: usage.Cost,
-				})
-			}
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"shown": true,
+		writeEvt := startSSE(w)
+		writeEvt(map[string]any{
+			"type":  "shown",
 			"dump":  dump,
 			"nodes": len(topo.Nodes),
 			"edges": len(topo.Edges),
-			"reply": reply,
 		})
+		t, ok := s.bank.Get(sess.TaskID)
+		if !ok {
+			writeEvt(map[string]any{"type": "error", "message": "нет задачи"})
+			return
+		}
+		history, _ := s.store.ListMessages(r.Context(), sess.ID)
+		s.streamInterview(r.Context(), writeEvt, sess, t, history[:len(history)-1], msg)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

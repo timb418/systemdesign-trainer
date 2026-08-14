@@ -203,6 +203,26 @@
     chat.scrollTop = chat.scrollHeight;
   }
 
+  async function readSSE(res, onEvent) {
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const parts = buf.split("\n\n");
+      buf = parts.pop();
+      for (const block of parts) {
+        const line = block.split("\n").find((l) => l.startsWith("data: "));
+        if (!line) continue;
+        let ev;
+        try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+        onEvent(ev);
+      }
+    }
+  }
+
   if (form) {
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -221,28 +241,14 @@
         body.textContent = "Ошибка отправки.";
         return;
       }
-      const reader = res.body.getReader();
-      const dec = new TextDecoder();
-      let buf = "";
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buf += dec.decode(value, { stream: true });
-        const parts = buf.split("\n\n");
-        buf = parts.pop();
-        for (const block of parts) {
-          const line = block.split("\n").find((l) => l.startsWith("data: "));
-          if (!line) continue;
-          let ev;
-          try { ev = JSON.parse(line.slice(6)); } catch { continue; }
-          if (ev.type === "token") body.textContent += ev.text;
-          if (ev.type === "usage" && usageEl) {
-            usageEl.textContent = ev.label || "";
-          }
-          if (ev.type === "error") body.textContent += "\n" + ev.message;
-          chat.scrollTop = chat.scrollHeight;
+      await readSSE(res, (ev) => {
+        if (ev.type === "token") body.textContent += ev.text;
+        if (ev.type === "usage" && usageEl) {
+          usageEl.textContent = ev.label || "";
         }
-      }
+        if (ev.type === "error") body.textContent += "\n" + ev.message;
+        chat.scrollTop = chat.scrollHeight;
+      });
     });
   }
 
@@ -271,6 +277,8 @@
   iframe.src = drawio + (drawio.includes("?") ? "&" : "?") + params + extra;
 
   let ready = false;
+  let pendingShow = false;
+  let showing = false;
   window.addEventListener("message", (evt) => {
     if (evt.source !== iframe.contentWindow) return;
     let msg;
@@ -290,24 +298,64 @@
         body: JSON.stringify({ xml: msg.xml, show: false }),
       });
     }
-    if (msg.event === "export" && msg.xml && pendingShow) {
+    if (msg.event === "export" && pendingShow) {
+      const xml = msg.xml || msg.data;
+      if (!xml) return;
       pendingShow = false;
-      fetch("/sessions/" + sessionId + "/board", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ xml: msg.xml, show: true }),
-      }).then(async (r) => {
-        const data = await r.json().catch(() => ({}));
-        if (data.shown || data.dump) appendBoardEvent(data.dump, data.nodes, data.edges);
-        if (data.reply) appendMsg("assistant", data.reply);
-      });
+      showBoard(xml);
     }
   });
 
-  let pendingShow = false;
+  async function showBoard(xml) {
+    if (showing) return;
+    showing = true;
+    const label = showBtn ? showBtn.textContent : "";
+    if (showBtn) {
+      showBtn.disabled = true;
+      showBtn.textContent = "Показываем…";
+    }
+    try {
+      const res = await fetch("/sessions/" + sessionId + "/board", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        body: JSON.stringify({ xml, show: true }),
+      });
+      if (!res.ok || !res.body) {
+        appendMsg("system", "Ошибка отправки доски.");
+        return;
+      }
+      let assistantBody = null;
+      await readSSE(res, (ev) => {
+        if (ev.type === "shown") {
+          appendBoardEvent(ev.dump, ev.nodes, ev.edges);
+        }
+        if (ev.type === "token") {
+          if (!assistantBody) assistantBody = appendMsg("assistant", "");
+          assistantBody.textContent += ev.text;
+        }
+        if (ev.type === "usage" && usageEl) {
+          usageEl.textContent = ev.label || "";
+        }
+        if (ev.type === "error") {
+          if (!assistantBody) assistantBody = appendMsg("assistant", "");
+          assistantBody.textContent += (assistantBody.textContent ? "\n" : "") + ev.message;
+        }
+        chat.scrollTop = chat.scrollHeight;
+      });
+    } catch (err) {
+      appendMsg("system", (err && err.message) || "нет сети");
+    } finally {
+      showing = false;
+      if (showBtn) {
+        showBtn.disabled = false;
+        showBtn.textContent = label;
+      }
+    }
+  }
+
   if (showBtn) {
     showBtn.addEventListener("click", () => {
-      if (!ready) return;
+      if (!ready || showing || pendingShow) return;
       pendingShow = true;
       iframe.contentWindow.postMessage(JSON.stringify({ action: "export", format: "xml" }), "*");
     });
