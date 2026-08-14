@@ -280,9 +280,18 @@ function mountDrawioIframe(iframe, opts) {
   }
 
   if (form) {
+    const ta = form.querySelector("textarea");
+    const sendBtn = form.querySelector('button[type="submit"]');
+    const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+    if (sendBtn) sendBtn.title = isMac ? "⌘↵" : "Ctrl+Enter";
+    ta.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" || e.repeat) return;
+      if (!(e.metaKey || e.ctrlKey)) return;
+      e.preventDefault();
+      form.requestSubmit();
+    });
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const ta = form.querySelector("textarea");
       const content = ta.value.trim();
       if (!content) return;
       ta.value = "";
