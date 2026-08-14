@@ -1,0 +1,43 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="gold" name="Эталон">
+    <mxGraphModel dx="1000" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="700">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="client" value="Клиент" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="200" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="gw" value="API Gateway" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="240" y="200" width="140" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="svc" value="Shortener Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="460" y="200" width="160" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="cache" value="Redis кэш" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="480" y="40" width="120" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="db" value="Postgres" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="700" y="190" width="120" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="q" value="Очередь кликов" style="shape=process;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="460" y="360" width="160" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" value="HTTPS" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="client" target="gw">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" value="HTTP" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="gw" target="svc">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" value="GET code" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="svc" target="cache">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" value="code→url" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="svc" target="db">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" value="click event" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1" source="svc" target="q">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

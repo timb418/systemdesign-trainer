@@ -1,0 +1,19 @@
+{{define "content"}}
+<section>
+  <h1>История</h1>
+  {{if .Sessions}}
+  <ul class="cards">
+    {{range .Sessions}}
+    <li>
+      <a href="/sessions/{{.ID}}">
+        <strong>{{index $.Titles .TaskID}}</strong>
+        <span class="meta">{{.Mode.Label}} · {{.Status.Label}} · {{.StartedAt.Local.Format "02.01.2006 15:04"}}</span>
+      </a>
+    </li>
+    {{end}}
+  </ul>
+  {{else}}
+  <p class="empty">Сессий ещё нет.</p>
+  {{end}}
+</section>
+{{end}}

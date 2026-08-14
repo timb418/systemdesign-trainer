@@ -1,0 +1,38 @@
+{{define "content"}}
+<article class="compare">
+  <p class="crumb"><a href="/sessions/{{.Session.ID}}">← сессия</a></p>
+  <h1>Сравнение с эталоном</h1>
+  <p class="meta">Эталон — один рабочий подход, не единственно верный.</p>
+  <div class="split">
+    <section>
+      <h2>Ваша попытка</h2>
+      <pre class="topo">{{.CandidateDump}}</pre>
+    </section>
+    <section>
+      <h2>Эталон</h2>
+      <pre class="topo">{{.GoldDump}}</pre>
+    </section>
+  </div>
+  <section>
+    <h2>Нарратив эталона</h2>
+    <div class="prose">{{.GoldNarrative}}</div>
+    {{if .GoldTradeoffs}}
+    <h3>Trade-offs эталона</h3>
+    <ul>
+      {{range .GoldTradeoffs}}<li>{{.}}</li>{{end}}
+    </ul>
+    {{end}}
+  </section>
+  {{if .Notes}}
+  <section>
+    <h2>Разбор отличий</h2>
+    <div class="prose">{{.Notes}}</div>
+  </section>
+  {{end}}
+  {{if .CanAnalyze}}
+  <form method="post" action="/sessions/{{.Session.ID}}/compare">
+    <button type="submit">Разобрать отличия</button>
+  </form>
+  {{end}}
+</article>
+{{end}}

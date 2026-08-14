@@ -27,6 +27,12 @@ go.work.sum
 # env file
 .env
 
+# App data / draw.io vendor
+third_party/drawio/
+*.db
+/bin/
+/trainer
+
 # Editor/IDE
 # .idea/
 # .vscode/

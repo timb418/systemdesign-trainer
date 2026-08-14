@@ -1,0 +1,24 @@
+{{define "content"}}
+<article class="rubric">
+  <p class="crumb"><a href="/sessions/{{.Session.ID}}">← сессия</a></p>
+  <h1>Рубрика</h1>
+  <p class="meta">{{.Task.Title}} · {{.Session.Mode.Label}}</p>
+  {{if .Usage}}<p class="usage">{{.Usage}}</p>{{end}}
+  {{if .Criteria}}
+  <ul class="criteria">
+    {{range .Criteria}}
+    <li class="level-{{.Level}}">
+      <strong>{{.Title}}</strong>
+      <span class="badge">{{.Level}}</span>
+      <p>{{.Comment}}</p>
+    </li>
+    {{end}}
+  </ul>
+  {{else}}
+  <p class="empty">Рубрики нет.</p>
+  {{end}}
+  {{if .CanCompare}}
+  <p><a class="btn" href="/sessions/{{.Session.ID}}/compare">Сравнить с эталоном</a></p>
+  {{end}}
+</article>
+{{end}}

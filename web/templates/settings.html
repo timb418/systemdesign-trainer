@@ -1,0 +1,27 @@
+{{define "content"}}
+<section>
+  <h1>Настройки</h1>
+  {{if .Saved}}<p class="flash">Сохранено.</p>{{end}}
+  {{if .Err}}<p class="flash error">{{.Err}}</p>{{end}}
+  <form method="post" action="/settings" class="settings">
+    <label>Ключ OpenRouter
+      <input type="password" name="api_key" placeholder="{{if .Masked}}{{.Masked}}{{else}}sk-or-…{{end}}" autocomplete="off">
+    </label>
+    <p class="hint">Ключ хранится локально в файле с правами 0600 и уходит только на OpenRouter. После сохранения в интерфейсе видна маска.</p>
+    <label>Модель интервьюера
+      <input name="interviewer_model" value="{{.Settings.InterviewerModel}}" required>
+    </label>
+    <label>Модель оценщика
+      <input name="evaluator_model" value="{{.Settings.EvaluatorModel}}" required>
+    </label>
+    <label class="check">
+      <input type="checkbox" name="timer_enabled" value="1" {{if .Settings.TimerEnabled}}checked{{end}}>
+      Таймер сессии
+    </label>
+    <label>Длительность, мин
+      <input type="number" name="timer_minutes" min="5" max="180" value="{{.Settings.TimerMinutes}}">
+    </label>
+    <button type="submit">Сохранить</button>
+  </form>
+</section>
+{{end}}

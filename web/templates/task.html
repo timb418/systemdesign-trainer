@@ -1,0 +1,22 @@
+{{define "content"}}
+<article class="task">
+  <p class="crumb"><a href="/">Каталог</a></p>
+  <h1>{{.Task.Title}}</h1>
+  <p class="meta">сложность {{.Task.Difficulty}} · {{.Task.DurationMin}} мин · {{join .TypeNames ", "}} · доска: {{if eq .Task.Canvas "sketch"}}набросок{{else}}пустая{{end}}</p>
+  <p>Публичное описание скрывает полное ТЗ — как на собесе. Интервьюер начнёт с неполного брифа.</p>
+  {{if .Err}}<p class="flash error">{{.Err}}</p>{{end}}
+  <form class="start" method="post" action="/sessions">
+    <input type="hidden" name="task_id" value="{{.Task.ID}}">
+    <label>Режим
+      <select name="mode">
+        <option value="full_mock">Полный mock</option>
+        <option value="drill">Дрилл по типу</option>
+        <option value="requirements_only">Только уточнение требований</option>
+        <option value="compare_gold" {{if not .CanCompare}}disabled{{end}}>Сравнение с эталоном</option>
+      </select>
+    </label>
+    {{if not .CanCompare}}<p class="hint">Сравнение с эталоном откроется после завершённого mock или дрилла.</p>{{end}}
+    <button type="submit">Начать сессию</button>
+  </form>
+</article>
+{{end}}

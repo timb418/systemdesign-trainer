@@ -1,0 +1,55 @@
+{{define "content"}}
+<section class="session" data-session="{{.Session.ID}}" data-started="{{.Session.StartedAt.Unix}}" data-timer="{{if .Session.TimerEnabled}}{{.Session.TimerMinutes}}{{else}}0{{end}}" data-drawio="{{.DrawioURL}}" data-xml-url="/sessions/{{.Session.ID}}/board.xml" data-mode="{{.Session.Mode}}">
+  <header class="session-bar">
+    <div>
+      <h1>{{.Task.Title}}</h1>
+      <p class="meta">{{.Session.Mode.Label}} · сложность {{.Task.Difficulty}}{{if .HasKey}}{{else}} · <a href="/settings">нет ключа OpenRouter</a>{{end}}</p>
+    </div>
+    <div class="session-actions">
+      <span id="timer" class="timer"></span>
+      <span id="usage" class="usage">{{if gt .Session.PromptTokens 0}}{{.Session.PromptTokens}}+{{.Session.CompletionTokens}} ток.{{if gt .Session.Cost 0}} · ${{printf "%.4f" .Session.Cost}}{{end}}{{end}}</span>
+      {{if ne .Session.Mode.String "requirements_only"}}
+      <button type="button" id="show-board">Показать доску интервьюеру</button>
+      {{end}}
+      {{if eq .Session.Status "in_progress"}}
+      <form method="post" action="/sessions/{{.Session.ID}}/complete">
+        <button type="submit">Завершить сессию</button>
+      </form>
+      {{else}}
+      <a class="btn" href="/sessions/{{.Session.ID}}/rubric">Рубрика</a>
+      {{end}}
+    </div>
+  </header>
+  <div class="split {{if eq .Session.Mode.String "requirements_only"}}no-board{{end}}">
+    <div class="chat-col">
+      <div id="chat" class="chat">
+        {{range .Messages}}
+        <article class="msg {{.Role}}">
+          <h3>{{if eq .Role "user"}}Вы{{else if eq .Role "assistant"}}Интервьюер{{else}}Система{{end}}</h3>
+          <div class="body">{{.Content}}</div>
+        </article>
+        {{end}}
+      </div>
+      {{if eq .Session.Status "in_progress"}}
+      <form id="chat-form" class="composer">
+        <textarea name="content" rows="3" required placeholder="Ответ или уточняющий вопрос…"></textarea>
+        <button type="submit">Отправить</button>
+      </form>
+      {{end}}
+    </div>
+    {{if ne .Session.Mode.String "requirements_only"}}
+    <div class="board-col">
+      <iframe id="board" title="Доска"></iframe>
+      {{if eq .Session.Status "in_progress"}}
+      <form class="upload" method="post" action="/sessions/{{.Session.ID}}/board/upload" enctype="multipart/form-data">
+        <label>Fallback: загрузить .drawio / XML
+          <input type="file" name="file" accept=".drawio,.xml,application/xml,text/xml">
+        </label>
+        <button type="submit">Загрузить</button>
+      </form>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+</section>
+{{end}}

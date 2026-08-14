@@ -1,0 +1,29 @@
+types:
+  - id: url_shortener
+    name: Шортенер / генерация ID
+  - id: rate_limiter
+    name: Rate limiting / защита API
+  - id: feed
+    name: Лента / fan-out
+  - id: chat
+    name: Мессенджер / чат
+  - id: object_storage
+    name: Хранение файлов и CDN
+  - id: search
+    name: Поиск
+  - id: notifications
+    name: Уведомления
+  - id: video
+    name: Загрузка и обработка видео / стриминг
+  - id: geo
+    name: Гео / матчинг
+  - id: queues
+    name: Очереди и отложенные задачи
+  - id: collab_editing
+    name: Коллаборативное редактирование
+  - id: payments
+    name: Платежи / идемпотентность / деньги
+  - id: metrics
+    name: Сбор метрик / аналитика событий
+  - id: crawler
+    name: Краулер / пайплайн данных

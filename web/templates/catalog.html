@@ -1,0 +1,39 @@
+{{define "content"}}
+<section class="hero">
+  <h1>Каталог задач</h1>
+  <p>Выберите тип архитектуры и сложность. Банк пока учебный: одна карточка, чтобы прогнать интерфейс.</p>
+</section>
+<form class="filters" method="get" action="/">
+  <label>Тип
+    <select name="type">
+      <option value="">все</option>
+      {{range .Types}}
+      <option value="{{.ID}}" {{if eq $.TypeFilter .ID}}selected{{end}}>{{.Name}}</option>
+      {{end}}
+    </select>
+  </label>
+  <label>Сложность
+    <select name="difficulty">
+      <option value="">все</option>
+      {{range .Difficulties}}
+      <option value="{{.}}" {{if eq $.DiffFilter .}}selected{{end}}>{{.}}</option>
+      {{end}}
+    </select>
+  </label>
+  <button type="submit">Показать</button>
+</form>
+{{if .Tasks}}
+<ul class="cards">
+  {{range .Tasks}}
+  <li>
+    <a href="/tasks/{{.ID}}">
+      <strong>{{.Title}}</strong>
+      <span class="meta">сложность {{.Difficulty}} · {{.DurationMin}} мин · {{join .TypeNames ", "}}</span>
+    </a>
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<p class="empty">Нет задач с таким фильтром. Сейчас в банке только сокращатель ссылок.</p>
+{{end}}
+{{end}}
