@@ -131,4 +131,24 @@
       iframe.contentWindow.postMessage(JSON.stringify({ action: "export", format: "xml" }), "*");
     });
   }
+
+  const uploadForm = root.querySelector("form.upload");
+  if (uploadForm) {
+    uploadForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = uploadForm.querySelector('input[type="file"]');
+      const file = input && input.files && input.files[0];
+      if (!file) return;
+      const xml = await file.text();
+      if (!xml.trim()) return;
+      await fetch("/sessions/" + sessionId + "/board", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ xml, show: false }),
+      });
+      if (ready && iframe.contentWindow) {
+        iframe.contentWindow.postMessage(JSON.stringify({ action: "load", xml, autosave: 1 }), "*");
+      }
+    });
+  }
 })();

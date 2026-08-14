@@ -7,7 +7,7 @@
     </div>
     <div class="session-actions">
       <span id="timer" class="timer"></span>
-      <span id="usage" class="usage">{{if gt .Session.PromptTokens 0}}{{.Session.PromptTokens}}+{{.Session.CompletionTokens}} ток.{{if gt .Session.Cost 0}} · ${{printf "%.4f" .Session.Cost}}{{end}}{{end}}</span>
+      <span id="usage" class="usage">{{if gt .Session.PromptTokens 0}}{{.Session.PromptTokens}}+{{.Session.CompletionTokens}} ток.{{if gt .Session.Cost 0.0}} · ${{printf "%.4f" .Session.Cost}}{{end}}{{end}}</span>
       {{if ne .Session.Mode.String "requirements_only"}}
       <button type="button" id="show-board">Показать доску интервьюеру</button>
       {{end}}
