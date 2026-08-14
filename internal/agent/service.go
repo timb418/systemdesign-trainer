@@ -76,7 +76,7 @@ type revealOut struct {
 func (a *Agents) revealTool(t tasks.Task) (tool.Tool, error) {
 	return functiontool.New(functiontool.Config{
 		Name:        "reveal_facts",
-		Description: "Верни скрытые факты карточки по теме: scale, functional, nonfunctional или id правила. Вызывай, когда кандидат спросил про нагрузку, фичи или NFR.",
+		Description: "Верни скрытые факты карточки по теме: scale, functional, nonfunctional или id правила. Вызывай, когда кандидат спросил про нагрузку, фичи или NFR. В реплике кандидату используй только пункты, которые отвечают на его вопрос; не зачитывай весь список.",
 	}, func(_ agent.Context, in revealIn) (revealOut, error) {
 		log.Printf("reveal_facts topic=%q task=%s", in.Topic, t.ID)
 		facts := t.Reveal(in.Topic)
