@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 
@@ -72,23 +73,22 @@ type revealOut struct {
 	Facts string `json:"facts"`
 }
 
-func (a *Agents) revealTool() (tool.Tool, error) {
+func (a *Agents) revealTool(t tasks.Task) (tool.Tool, error) {
 	return functiontool.New(functiontool.Config{
 		Name:        "reveal_facts",
 		Description: "Верни скрытые факты карточки по теме: scale, functional, nonfunctional или id правила. Вызывай, когда кандидат спросил про нагрузку, фичи или NFR.",
-	}, func(ctx agent.Context, in revealIn) (revealOut, error) {
-		taskID, _ := ctx.Session().State().Get("task_id")
-		id, _ := taskID.(string)
-		t, ok := a.bank.Get(id)
-		if !ok {
-			return revealOut{Facts: "карточка не найдена"}, nil
+	}, func(_ agent.Context, in revealIn) (revealOut, error) {
+		log.Printf("reveal_facts topic=%q task=%s", in.Topic, t.ID)
+		facts := t.Reveal(in.Topic)
+		if strings.Contains(facts, "нет заранее заданных фактов") {
+			log.Printf("reveal_facts: no facts for topic=%q task=%s", in.Topic, t.ID)
 		}
-		return revealOut{Facts: t.Reveal(in.Topic)}, nil
+		return revealOut{Facts: facts}, nil
 	})
 }
 
 func (a *Agents) interviewAgent(ctx context.Context, llm model.LLM, t tasks.Task, mode store.Mode) (agent.Agent, error) {
-	reveal, err := a.revealTool()
+	reveal, err := a.revealTool(t)
 	if err != nil {
 		return nil, err
 	}
@@ -182,18 +182,7 @@ func (a *Agents) Interview(ctx context.Context, sess store.Session, t tasks.Task
 		if event == nil {
 			continue
 		}
-		text := eventText(event)
-		if event.Partial && text != "" {
-			full.WriteString(text)
-			if onToken != nil {
-				onToken(text)
-			}
-		} else if !event.Partial && event.IsFinalResponse() && text != "" && full.Len() == 0 {
-			full.WriteString(text)
-			if onToken != nil {
-				onToken(text)
-			}
-		}
+		appendInterviewText(&full, event, onToken)
 		if u := usageFrom(event); u.PromptTokens+u.CompletionTokens > 0 || u.Cost > 0 {
 			usage = u
 		}
@@ -298,13 +287,55 @@ func (a *Agents) ensureInterviewSession(ctx context.Context, sess store.Session,
 	return nil
 }
 
+func appendInterviewText(full *strings.Builder, event *session.Event, onToken TokenFn) {
+	if event == nil {
+		return
+	}
+	if hasToolParts(event) {
+		full.Reset()
+		return
+	}
+	text := eventText(event)
+	if text == "" {
+		return
+	}
+	if event.Partial {
+		full.WriteString(text)
+		if onToken != nil {
+			onToken(text)
+		}
+		return
+	}
+	if event.IsFinalResponse() && full.Len() == 0 {
+		full.WriteString(text)
+		if onToken != nil {
+			onToken(text)
+		}
+	}
+}
+
+func hasToolParts(e *session.Event) bool {
+	if e == nil || e.Content == nil {
+		return false
+	}
+	for _, p := range e.Content.Parts {
+		if p == nil {
+			continue
+		}
+		if p.FunctionCall != nil || p.FunctionResponse != nil {
+			return true
+		}
+	}
+	return false
+}
+
 func eventText(e *session.Event) string {
 	if e == nil || e.Content == nil {
 		return ""
 	}
 	var b strings.Builder
 	for _, p := range e.Content.Parts {
-		if p == nil {
+		if p == nil || p.Thought || p.FunctionCall != nil || p.FunctionResponse != nil {
 			continue
 		}
 		b.WriteString(p.Text)
