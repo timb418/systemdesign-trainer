@@ -1,4 +1,141 @@
 (() => {
+  const forms = document.querySelectorAll("form[data-wait-title]");
+  if (!forms.length) return;
+
+  const overlay = document.createElement("div");
+  overlay.className = "wait-overlay";
+  overlay.hidden = true;
+  overlay.innerHTML =
+    '<div class="wait-card">' +
+      '<div class="wait-spinner" aria-hidden="true"></div>' +
+      "<h2></h2>" +
+      '<p class="wait-status" aria-live="polite"></p>' +
+      '<p class="wait-hint"></p>' +
+      '<p class="wait-elapsed"></p>' +
+      '<p class="wait-error" hidden></p>' +
+      '<div class="wait-actions" hidden>' +
+        '<button type="button" class="wait-retry">Повторить</button>' +
+        '<button type="button" class="wait-close">Закрыть</button>' +
+      "</div>" +
+    "</div>";
+  document.body.appendChild(overlay);
+
+  const titleEl = overlay.querySelector("h2");
+  const statusEl = overlay.querySelector(".wait-status");
+  const hintEl = overlay.querySelector(".wait-hint");
+  const elapsedEl = overlay.querySelector(".wait-elapsed");
+  const errorEl = overlay.querySelector(".wait-error");
+  const actionsEl = overlay.querySelector(".wait-actions");
+
+  let busy = false;
+  let elapsedTimer = 0;
+  let activeForm = null;
+
+  function formatElapsed(ms) {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  }
+
+  function stopElapsed() {
+    if (elapsedTimer) {
+      clearInterval(elapsedTimer);
+      elapsedTimer = 0;
+    }
+  }
+
+  function setState(state, status, err) {
+    overlay.classList.remove("wait-sending", "wait-waiting", "wait-done", "wait-failed");
+    overlay.classList.add("wait-" + state);
+    statusEl.textContent = status;
+    if (err) {
+      errorEl.hidden = false;
+      errorEl.textContent = err;
+      actionsEl.hidden = false;
+    } else {
+      errorEl.hidden = true;
+      errorEl.textContent = "";
+      actionsEl.hidden = true;
+    }
+  }
+
+  function closeOverlay() {
+    stopElapsed();
+    busy = false;
+    overlay.hidden = true;
+    if (activeForm) {
+      const btn = activeForm.querySelector('button[type="submit"]');
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function errorFrom(res) {
+    try {
+      const html = await res.text();
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const flash = doc.querySelector(".flash.error");
+      const msg = flash && flash.textContent.trim();
+      if (msg) return msg;
+    } catch (_) { /* ignore parse errors */ }
+    return res.statusText || ("ошибка " + res.status);
+  }
+
+  async function run(form) {
+    if (busy) return;
+    busy = true;
+    activeForm = form;
+    const btn = form.querySelector('button[type="submit"]');
+    if (btn) btn.disabled = true;
+
+    titleEl.textContent = form.dataset.waitTitle || "Обработка";
+    hintEl.textContent = form.dataset.waitHint || "";
+    elapsedEl.textContent = "0:00";
+    overlay.hidden = false;
+    setState("sending", "Отправляем…");
+
+    const started = Date.now();
+    const pending = fetch(form.action, { method: "POST", body: new FormData(form), redirect: "follow" });
+    setState("waiting", "Ждём ответ модели");
+    stopElapsed();
+    elapsedTimer = setInterval(() => {
+      elapsedEl.textContent = formatElapsed(Date.now() - started);
+    }, 250);
+
+    try {
+      const res = await pending;
+      stopElapsed();
+      elapsedEl.textContent = formatElapsed(Date.now() - started);
+      if (!res.ok) {
+        busy = false;
+        if (btn) btn.disabled = false;
+        setState("failed", "Не удалось", await errorFrom(res));
+        return;
+      }
+      setState("done", "Готово");
+      const next = res.url || form.action;
+      setTimeout(() => { window.location.assign(next); }, 400);
+    } catch (err) {
+      stopElapsed();
+      elapsedEl.textContent = formatElapsed(Date.now() - started);
+      busy = false;
+      if (btn) btn.disabled = false;
+      setState("failed", "Не удалось", (err && err.message) || "нет сети");
+    }
+  }
+
+  overlay.querySelector(".wait-retry").addEventListener("click", () => {
+    if (activeForm) run(activeForm);
+  });
+  overlay.querySelector(".wait-close").addEventListener("click", closeOverlay);
+
+  forms.forEach((form) => {
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      run(form);
+    });
+  });
+})();
+
+(() => {
   const root = document.querySelector(".session");
   if (!root) return;
 

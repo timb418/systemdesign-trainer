@@ -12,7 +12,7 @@
       <button type="button" id="show-board" title="Интервьюер не видит холст. Уходит текстовая схема узлов и связей.">Показать доску интервьюеру</button>
       {{end}}
       {{if eq .Session.Status "in_progress"}}
-      <form method="post" action="/sessions/{{.Session.ID}}/complete">
+      <form method="post" action="/sessions/{{.Session.ID}}/complete" data-wait-title="Оцениваем интервью" data-wait-hint="Оценщик разбирает транскрипт и схему. Обычно это занимает около минуты.">
         <button type="submit">Завершить сессию</button>
       </form>
       {{else}}

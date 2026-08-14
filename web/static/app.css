@@ -151,6 +151,56 @@ body:has(.session) main {
 .topo { background: var(--card); padding: 1rem; border: 1px solid var(--line); overflow: auto; white-space: pre-wrap; }
 .prose { white-space: pre-wrap; }
 .check { flex-direction: row; align-items: center; }
+.wait-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(28, 25, 23, 0.45);
+}
+.wait-overlay[hidden] { display: none; }
+.wait-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1.75rem 1.5rem;
+  max-width: 28rem;
+  width: 100%;
+  text-align: center;
+}
+.wait-spinner {
+  width: 2rem;
+  height: 2rem;
+  margin: 0 auto 1rem;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: wait-spin 0.8s linear infinite;
+}
+.wait-overlay.wait-failed .wait-spinner,
+.wait-overlay.wait-done .wait-spinner { display: none; }
+@keyframes wait-spin { to { transform: rotate(360deg); } }
+.wait-card h2 { margin: 0 0 0.35rem; font-size: 1.25rem; }
+.wait-status { margin: 0; font-weight: 600; }
+.wait-hint, .wait-elapsed { margin: 0.35rem 0 0; color: var(--muted); }
+.wait-elapsed { font-variant-numeric: tabular-nums; }
+.wait-error { margin: 0.75rem 0 0; color: var(--danger); }
+.wait-error[hidden], .wait-actions[hidden] { display: none; }
+.wait-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+.wait-close {
+  background: var(--card);
+  color: var(--ink);
+  border-color: var(--line);
+}
 @media (max-width: 900px) {
   .split { grid-template-columns: 1fr; }
   .session .split {

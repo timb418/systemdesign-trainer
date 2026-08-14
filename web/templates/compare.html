@@ -30,7 +30,7 @@
   </section>
   {{end}}
   {{if .CanAnalyze}}
-  <form method="post" action="/sessions/{{.Session.ID}}/compare">
+  <form method="post" action="/sessions/{{.Session.ID}}/compare" data-wait-title="Разбираем отличия от эталона" data-wait-hint="Сравниваем вашу схему и транскрипт с эталоном. Обычно это занимает около минуты.">
     <button type="submit">Разобрать отличия</button>
   </form>
   {{end}}

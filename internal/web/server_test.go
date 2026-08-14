@@ -81,8 +81,12 @@ func TestCatalogAndSessionStart(t *testing.T) {
 		t.Fatalf("start %d loc=%s", res.StatusCode, loc)
 	}
 	html, _ := io.ReadAll(mustGet(t, client, ts.URL+loc))
-	if !strings.Contains(string(html), "коротких ссылок") {
+	page := string(html)
+	if !strings.Contains(page, "коротких ссылок") {
 		t.Fatalf("session missing brief: %s", html)
+	}
+	if !strings.Contains(page, `data-wait-title="Оцениваем интервью"`) {
+		t.Fatalf("complete form missing wait title: %s", html)
 	}
 }
 
