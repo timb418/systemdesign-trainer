@@ -40,6 +40,11 @@ type forcedPhaseView struct {
 	Notes string
 }
 
+type hintView struct {
+	Number int
+	Text   string
+}
+
 type conceptMasteryView struct {
 	Title       string
 	Practiced   int
@@ -187,12 +192,10 @@ func (s *Server) showLearningSession(w http.ResponseWriter, r *http.Request, ses
 		return
 	}
 	results, _ := s.store.LearningPhaseResults(r.Context(), sess.ID)
-	currentIndex := len(blueprint.Phases)
 	var current tasks.LearningPhase
 	var phases []learningPhaseView
-	for i, phase := range blueprint.Phases {
+	for _, phase := range blueprint.Phases {
 		if phase.ID == state.Phase {
-			currentIndex = i
 			current = phase
 		}
 		res := results[phase.ID]
@@ -202,27 +205,23 @@ func (s *Server) showLearningSession(w http.ResponseWriter, r *http.Request, ses
 			Forced: res.Forced, Notes: res.Notes,
 		})
 	}
-	hint := ""
-	if currentIndex < len(blueprint.Phases) && state.HintLevel > 0 {
-		index := state.HintLevel - 1
-		if index >= len(current.Hints) {
-			index = len(current.Hints) - 1
-		}
-		if index >= 0 {
-			hint = current.Hints[index]
-		}
+	var hints []hintView
+	for i, text := range current.Hints {
+		hints = append(hints, hintView{Number: i + 1, Text: text})
 	}
 	s.render(w, "learning_session.html", map[string]any{
 		"Title": task.Title, "Session": sess, "Task": task.Public(), "Messages": messages,
 		"DrawioURL": s.drawio, "HasKey": s.set.HasAPIKey(), "Blueprint": blueprint,
-		"State": state, "CurrentPhase": current, "Phases": phases, "Hint": hint,
-		"CanHint":      currentIndex < len(blueprint.Phases),
+		"State": state, "CurrentPhase": current, "Phases": phases, "HintList": hints,
 		"GoldUnlocked": state.Phase == "complete",
 	})
 }
 
+// learningHint is a silent usage ping fired when the candidate opens one of the sidebar's
+// static hint spoilers, so it still counts toward assistance scoring — the hint text itself is
+// already fully rendered in the page, so there's nothing left to return here.
 func (s *Server) learningHint(w http.ResponseWriter, r *http.Request) {
-	sess, _, state, phase, ok := s.learningRequest(w, r)
+	sess, _, state, _, ok := s.learningRequest(w, r)
 	if !ok {
 		return
 	}
@@ -230,17 +229,40 @@ func (s *Server) learningHint(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, 400, "обучение уже завершено")
 		return
 	}
-	next, err := s.store.IncreaseLearningHint(r.Context(), sess.ID)
-	if err != nil {
+	if _, err := s.store.IncreaseLearningHint(r.Context(), sess.ID); err != nil {
 		s.fail(w, 500, err.Error())
 		return
 	}
-	content := "Заготовленные подсказки закончились — сформулируйте конкретный вопрос наставнику в чате, и он подскажет дальше."
-	if next.HintLevel <= len(phase.Hints) {
-		content = fmt.Sprintf("Подсказка %d/%d: %s", next.HintLevel, len(phase.Hints), phase.Hints[next.HintLevel-1])
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// learningContextHint asks the mentor LLM for a hint tailored to the conversation so far
+// (as opposed to the generic static hint list), streamed into the chat like a normal turn.
+func (s *Server) learningContextHint(w http.ResponseWriter, r *http.Request) {
+	sess, _, state, _, ok := s.learningRequest(w, r)
+	if !ok {
+		return
 	}
-	_, _ = s.store.AddMessage(r.Context(), store.Message{SessionID: sess.ID, Role: "system", Content: content})
-	http.Redirect(w, r, "/sessions/"+sess.ID, http.StatusSeeOther)
+	if state.Phase == "complete" {
+		s.fail(w, 400, "обучение уже завершено")
+		return
+	}
+	t, ok := s.bank.Get(sess.TaskID)
+	if !ok {
+		s.fail(w, 404, "нет задачи")
+		return
+	}
+	if _, err := s.store.IncreaseLearningHint(r.Context(), sess.ID); err != nil {
+		s.fail(w, 500, err.Error())
+		return
+	}
+	const ask = "💡 Прошу подсказку с учётом разговора."
+	if _, err := s.store.AddMessage(r.Context(), store.Message{SessionID: sess.ID, Role: "user", Content: ask}); err != nil {
+		s.fail(w, 500, err.Error())
+		return
+	}
+	history, _ := s.store.ListMessages(r.Context(), sess.ID)
+	s.streamConversation(r.Context(), startSSE(w), sess, t, history[:len(history)-1], ask, true)
 }
 
 func (s *Server) learningAdvance(w http.ResponseWriter, r *http.Request) {

@@ -31,15 +31,20 @@ func interviewerInstruction(t tasks.Task, mode store.Mode) string {
 	return s + rules.String()
 }
 
-func mentorInstruction(t tasks.Task, blueprint tasks.LearningBlueprint, phase tasks.LearningPhase) string {
+func mentorInstruction(t tasks.Task, blueprint tasks.LearningBlueprint, phase tasks.LearningPhase, hintMode bool) string {
 	s := mentorPrompt
+	hintNote := ""
+	if hintMode {
+		hintNote = "Ученик прямо сейчас нажал кнопку «Подсказка по разговору» и просит осмысленную подсказку с учётом уже обсуждённого. Дай ровно одну конкретную подсказку про следующий шаг, без встречного вопроса и без готовой архитектуры."
+	}
 	replacements := map[string]string{
-		"{{phase_title}}": phase.Title,
-		"{{phase_goal}}":  phase.Goal,
-		"{{task_title}}":  t.Title,
-		"{{difficulty}}":  fmt.Sprintf("%d", t.Difficulty),
-		"{{objectives}}":  bulletList(blueprint.Objectives),
-		"{{concepts}}":    conceptList(blueprint.Concepts),
+		"{{phase_title}}":       phase.Title,
+		"{{phase_goal}}":        phase.Goal,
+		"{{task_title}}":        t.Title,
+		"{{difficulty}}":        fmt.Sprintf("%d", t.Difficulty),
+		"{{objectives}}":        bulletList(blueprint.Objectives),
+		"{{concepts}}":          conceptList(blueprint.Concepts),
+		"{{hint_request_note}}": hintNote,
 	}
 	for old, value := range replacements {
 		s = strings.ReplaceAll(s, old, value)

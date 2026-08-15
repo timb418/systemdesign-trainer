@@ -71,6 +71,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /sessions/{id}/gold.xml", s.goldXML)
 	mux.HandleFunc("POST /sessions/{id}/messages", s.postMessage)
 	mux.HandleFunc("POST /sessions/{id}/learning/hint", s.learningHint)
+	mux.HandleFunc("POST /sessions/{id}/learning/context-hint", s.learningContextHint)
 	mux.HandleFunc("POST /sessions/{id}/learning/advance", s.learningAdvance)
 	mux.HandleFunc("POST /sessions/{id}/board", s.postBoard)
 	mux.HandleFunc("POST /sessions/{id}/board/upload", s.uploadBoard)
@@ -395,7 +396,7 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = s.store.AddMessage(r.Context(), store.Message{SessionID: sess.ID, Role: "user", Content: body.Content})
 	history, _ := s.store.ListMessages(r.Context(), sess.ID)
-	s.streamConversation(r.Context(), startSSE(w), sess, t, history[:len(history)-1], body.Content)
+	s.streamConversation(r.Context(), startSSE(w), sess, t, history[:len(history)-1], body.Content, false)
 }
 
 func startSSE(w http.ResponseWriter) func(any) {
@@ -411,7 +412,7 @@ func startSSE(w http.ResponseWriter) func(any) {
 	}
 }
 
-func (s *Server) streamConversation(ctx context.Context, writeEvt func(any), sess store.Session, t tasks.Task, history []store.Message, userText string) {
+func (s *Server) streamConversation(ctx context.Context, writeEvt func(any), sess store.Session, t tasks.Task, history []store.Message, userText string, hintMode bool) {
 	var text string
 	var usage traineragent.Usage
 	var err error
@@ -436,7 +437,7 @@ func (s *Server) streamConversation(ctx context.Context, writeEvt func(any), ses
 			writeEvt(map[string]any{"type": "error", "message": "обучение завершено"})
 			return
 		}
-		text, usage, err = s.agents.Mentor(ctx, sess, t, learningBlueprint, learningPhaseVal, history, userText, onToken)
+		text, usage, err = s.agents.Mentor(ctx, sess, t, learningBlueprint, learningPhaseVal, history, userText, hintMode, onToken)
 	} else {
 		text, usage, err = s.agents.Interview(ctx, sess, t, history, userText, onToken)
 	}
@@ -525,7 +526,7 @@ func (s *Server) postBoard(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		history, _ := s.store.ListMessages(r.Context(), sess.ID)
-		s.streamConversation(r.Context(), writeEvt, sess, t, history[:len(history)-1], msg)
+		s.streamConversation(r.Context(), writeEvt, sess, t, history[:len(history)-1], msg, false)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

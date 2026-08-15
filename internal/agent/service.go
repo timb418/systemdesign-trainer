@@ -43,7 +43,7 @@ func (a *Agents) Interview(ctx context.Context, sess store.Session, t tasks.Task
 	return runToolLoop(ctx, client, params, t, onToken)
 }
 
-func (a *Agents) Mentor(ctx context.Context, sess store.Session, t tasks.Task, blueprint tasks.LearningBlueprint, phase tasks.LearningPhase, history []store.Message, userText string, onToken TokenFn) (string, Usage, error) {
+func (a *Agents) Mentor(ctx context.Context, sess store.Session, t tasks.Task, blueprint tasks.LearningBlueprint, phase tasks.LearningPhase, history []store.Message, userText string, hintMode bool, onToken TokenFn) (string, Usage, error) {
 	key, cfg, err := a.keyAndSettings()
 	if err != nil {
 		return "", Usage{}, err
@@ -51,7 +51,7 @@ func (a *Agents) Mentor(ctx context.Context, sess store.Session, t tasks.Task, b
 	client := newClient(key, cfg.ReasoningEffort)
 	params := openai.ChatCompletionNewParams{
 		Model:       cfg.InterviewerModel,
-		Messages:    buildHistory(mentorInstruction(t, blueprint, phase), history, userText),
+		Messages:    buildHistory(mentorInstruction(t, blueprint, phase, hintMode), history, userText),
 		Tools:       []openai.ChatCompletionToolUnionParam{revealFactsTool()},
 		Temperature: openai.Float(0.6),
 	}

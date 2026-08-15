@@ -21,7 +21,7 @@ func TestMentorInstructionDoesNotContainGold(t *testing.T) {
 		Concepts:   []tasks.Concept{{Title: "Кэш", Summary: "Ускоряет чтение."}},
 	}
 	phase := tasks.LearningPhase{ID: "hld", Title: "HLD", Goal: "Нарисовать сквозной путь"}
-	instruction := mentorInstruction(task, blueprint, phase)
+	instruction := mentorInstruction(task, blueprint, phase, false)
 	if strings.Contains(instruction, task.PreferredSolution.Narrative) ||
 		strings.Contains(instruction, task.PreferredSolution.Tradeoffs[0]) {
 		t.Fatal("mentor instruction leaked preferred solution")
@@ -31,5 +31,19 @@ func TestMentorInstructionDoesNotContainGold(t *testing.T) {
 	}
 	if strings.Contains(instruction, task.PromptPublic) {
 		t.Fatal("mentor instruction duplicates the public brief already pinned in chat history")
+	}
+}
+
+func TestMentorInstructionHintMode(t *testing.T) {
+	task := tasks.Task{Title: "Тестовая задача", Difficulty: 2}
+	blueprint := tasks.LearningBlueprint{}
+	phase := tasks.LearningPhase{ID: "hld", Title: "HLD", Goal: "Нарисовать сквозной путь"}
+	without := mentorInstruction(task, blueprint, phase, false)
+	if strings.Contains(without, "Подсказка по разговору") {
+		t.Fatalf("hint note leaked without hint mode: %s", without)
+	}
+	with := mentorInstruction(task, blueprint, phase, true)
+	if !strings.Contains(with, "Подсказка по разговору") {
+		t.Fatalf("hint mode missing its instruction: %s", with)
 	}
 }

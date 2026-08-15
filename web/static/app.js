@@ -215,14 +215,29 @@ async function flashErrorFrom(res) {
     });
   }
 
+  function bindHintSpoilers() {
+    document.querySelectorAll("#learning-sidebar .hint-item").forEach((details) => {
+      if (details.dataset.bound) return;
+      details.dataset.bound = "1";
+      details.addEventListener("toggle", () => {
+        if (details.open && !details.dataset.pinged) {
+          details.dataset.pinged = "1";
+          fetch("/sessions/" + sessionId + "/learning/hint", { method: "POST" });
+        }
+      });
+    });
+  }
+
   async function refreshLearningUI() {
     const res = await fetch(location.pathname);
     if (!res.ok) return;
     morphLearningChrome(new DOMParser().parseFromString(await res.text(), "text/html"));
+    bindHintSpoilers();
   }
 
   if (isLearning) {
-    document.querySelectorAll('form[action$="/learning/hint"], form[action$="/learning/advance"]').forEach((form) => {
+    bindHintSpoilers();
+    document.querySelectorAll('form[action$="/learning/advance"]').forEach((form) => {
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const btn = form.querySelector('button[type="submit"]');
@@ -234,6 +249,7 @@ async function flashErrorFrom(res) {
           return;
         }
         morphLearningChrome(new DOMParser().parseFromString(await res.text(), "text/html"));
+        bindHintSpoilers();
         if (btn) btn.disabled = false;
       });
     });
@@ -315,6 +331,30 @@ async function flashErrorFrom(res) {
     }
   }
 
+  async function sendToChat(url, body) {
+    const target = appendMsg("assistant", "");
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify(body || {}),
+    });
+    if (!res.ok || !res.body) {
+      target.textContent = "Ошибка отправки.";
+      return;
+    }
+    let phaseAdvanced = false;
+    await readSSE(res, (ev) => {
+      if (ev.type === "token") target.textContent += ev.text;
+      if (ev.type === "usage" && usageEl) {
+        usageEl.textContent = ev.label || "";
+      }
+      if (ev.type === "error") target.textContent += "\n" + ev.message;
+      if (ev.type === "phase_advanced") phaseAdvanced = true;
+      chat.scrollTop = chat.scrollHeight;
+    });
+    if (phaseAdvanced) await refreshLearningUI();
+  }
+
   if (form) {
     const ta = form.querySelector("textarea");
     const sendBtn = form.querySelector('button[type="submit"]');
@@ -332,27 +372,17 @@ async function flashErrorFrom(res) {
       if (!content) return;
       ta.value = "";
       appendMsg("user", content);
-      const body = appendMsg("assistant", "");
-      const res = await fetch("/sessions/" + sessionId + "/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-        body: JSON.stringify({ content }),
-      });
-      if (!res.ok || !res.body) {
-        body.textContent = "Ошибка отправки.";
-        return;
-      }
-      let phaseAdvanced = false;
-      await readSSE(res, (ev) => {
-        if (ev.type === "token") body.textContent += ev.text;
-        if (ev.type === "usage" && usageEl) {
-          usageEl.textContent = ev.label || "";
-        }
-        if (ev.type === "error") body.textContent += "\n" + ev.message;
-        if (ev.type === "phase_advanced") phaseAdvanced = true;
-        chat.scrollTop = chat.scrollHeight;
-      });
-      if (phaseAdvanced) await refreshLearningUI();
+      await sendToChat("/sessions/" + sessionId + "/messages", { content });
+    });
+  }
+
+  const contextHintBtn = document.getElementById("context-hint-btn");
+  if (contextHintBtn) {
+    contextHintBtn.addEventListener("click", async () => {
+      contextHintBtn.disabled = true;
+      appendMsg("user", "💡 Прошу подсказку с учётом разговора.");
+      await sendToChat("/sessions/" + sessionId + "/learning/context-hint", {});
+      contextHintBtn.disabled = false;
     });
   }
 

@@ -161,6 +161,7 @@ body:has(.session) main {
 #composer-wrap, #upload-wrap { flex-shrink: 0; }
 .composer { display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-shrink: 0; }
 .composer textarea { flex: 1; }
+.composer-actions { display: flex; flex-direction: column; gap: 0.4rem; }
 #board, .diagram-frame {
   display: block;
   width: 100%;
@@ -231,8 +232,11 @@ body:has(.session) main {
 .phase-card p { margin: 0.35rem 0; }
 .phase-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem; }
 .phase-actions form { margin: 0; }
-.learning-hint { padding: 0.55rem; border-radius: 6px; background: var(--assistant); }
+.hint-list { display: grid; gap: 0.4rem; margin-top: 0.75rem; }
+.hint-item { padding: 0.15rem 0.55rem; border-radius: 6px; background: var(--assistant); }
+.hint-item p { margin: 0.35rem 0; }
 .learning-sidebar details { margin-top: 1rem; }
+.learning-sidebar .hint-item { margin-top: 0; }
 .learning-sidebar summary { cursor: pointer; color: var(--accent); }
 .wait-overlay {
   position: fixed;

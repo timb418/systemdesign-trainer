@@ -377,14 +377,32 @@ func TestLearningModeProgressiveDisclosure(t *testing.T) {
 		t.Fatalf("advance without attempt = %d, want 400", blocked.StatusCode)
 	}
 
-	res, err = client.PostForm(ts.URL+sessionPath+"/learning/hint", url.Values{})
+	// All of the phase's hints are already rendered as spoilers on first load — no
+	// button/click needed to reveal them.
+	if !strings.Contains(string(page), "Подсказка 1") || !strings.Contains(string(page), "Подсказка 2") {
+		t.Fatalf("static hint list not rendered upfront: %s", page)
+	}
+
+	hintRes, err := client.Post(ts.URL+sessionPath+"/learning/hint", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	hintPage, _ := io.ReadAll(res.Body)
-	res.Body.Close()
-	if !strings.Contains(string(hintPage), "Подсказка 1") {
-		t.Fatalf("hint did not persist: %s", hintPage)
+	_, _ = io.Copy(io.Discard, hintRes.Body)
+	hintRes.Body.Close()
+	if hintRes.StatusCode != http.StatusNoContent {
+		t.Fatalf("learning/hint ping status = %d, want 204", hintRes.StatusCode)
+	}
+
+	// The contextual (LLM) hint reuses the chat SSE stream and also counts toward
+	// assistance scoring, just like the static hint ping above.
+	ctxHintRes, err := client.Post(ts.URL+sessionPath+"/learning/context-hint", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.Copy(io.Discard, ctxHintRes.Body)
+	ctxHintRes.Body.Close()
+	if ctxHintRes.StatusCode != http.StatusOK {
+		t.Fatalf("learning/context-hint status = %d, want 200", ctxHintRes.StatusCode)
 	}
 
 	for phase := 0; phase < tasks.LearningPhaseCount; phase++ {
@@ -416,6 +434,9 @@ func TestLearningModeProgressiveDisclosure(t *testing.T) {
 		// so the sidebar must mark the just-completed phase as forced.
 		if !strings.Contains(string(advancedPage), "принудительно") {
 			t.Fatalf("phase %d advance missing forced marker: %s", phase, advancedPage)
+		}
+		if phase == 0 && !strings.Contains(string(advancedPage), "с подсказкой") {
+			t.Fatalf("phase 0 should be marked hinted after static+contextual hint use: %s", advancedPage)
 		}
 	}
 

@@ -36,13 +36,17 @@
       <div class="phase-card">
         <h3>{{.CurrentPhase.Title}}</h3>
         <p>{{.CurrentPhase.Goal}}</p>
-        {{if .Hint}}<p class="learning-hint"><strong>Подсказка {{.State.HintLevel}}:</strong> {{.Hint}}</p>{{end}}
-        <div class="phase-actions">
-          {{if .CanHint}}
-          <form method="post" action="/sessions/{{.Session.ID}}/learning/hint">
-            <button type="submit" class="secondary">Нужна подсказка</button>
-          </form>
+        {{if .HintList}}
+        <div class="hint-list">
+          {{range .HintList}}
+          <details class="hint-item" data-hint-index="{{.Number}}">
+            <summary>Подсказка {{.Number}}</summary>
+            <p>{{.Text}}</p>
+          </details>
           {{end}}
+        </div>
+        {{end}}
+        <div class="phase-actions">
           <form method="post" action="/sessions/{{.Session.ID}}/learning/advance">
             <button type="submit">Этап готов</button>
           </form>
@@ -82,7 +86,10 @@
       {{if and (eq .Session.Status "in_progress") (not .GoldUnlocked)}}
       <form id="chat-form" class="composer">
         <textarea name="content" rows="3" required placeholder="Ваша попытка, вопрос или просьба объяснить понятие…"></textarea>
-        <button type="submit">Отправить</button>
+        <div class="composer-actions">
+          <button type="button" id="context-hint-btn" class="secondary">💡 Подсказка по разговору</button>
+          <button type="submit">Отправить</button>
+        </div>
       </form>
       {{end}}
       </div>
