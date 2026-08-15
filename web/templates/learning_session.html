@@ -5,7 +5,7 @@
       <h1>{{.Task.Title}}</h1>
       <p class="meta">Обучение · сложность {{.Task.Difficulty}}{{if .HasKey}}{{else}} · <a href="/settings">нет ключа OpenRouter</a>{{end}}</p>
     </div>
-    <div class="session-actions">
+    <div class="session-actions" id="session-actions">
       <span id="usage" class="usage">{{if gt .Session.PromptTokens 0}}{{.Session.PromptTokens}}+{{.Session.CompletionTokens}} ток.{{if gt .Session.Cost 0.0}} · ${{printf "%.4f" .Session.Cost}}{{end}}{{end}}</span>
       {{if eq .Session.Status "in_progress"}}
         {{if .GoldUnlocked}}
@@ -22,7 +22,7 @@
   </header>
 
   <div class="learning-layout">
-    <aside class="learning-sidebar">
+    <aside class="learning-sidebar" id="learning-sidebar">
       <h2>Путь решения</h2>
       <ol class="phase-list">
         {{range .Phases}}
@@ -78,16 +78,19 @@
         {{end}}
         {{end}}
       </div>
+      <div id="composer-wrap">
       {{if and (eq .Session.Status "in_progress") (not .GoldUnlocked)}}
       <form id="chat-form" class="composer">
         <textarea name="content" rows="3" required placeholder="Ваша попытка, вопрос или просьба объяснить понятие…"></textarea>
         <button type="submit">Отправить</button>
       </form>
       {{end}}
+      </div>
     </div>
 
     <div class="board-col">
       <iframe id="board" title="Доска"></iframe>
+      <div id="upload-wrap">
       {{if and (eq .Session.Status "in_progress") (not .GoldUnlocked)}}
       <form class="upload" method="post" action="/sessions/{{.Session.ID}}/board/upload" enctype="multipart/form-data">
         <label>Fallback: загрузить .drawio / XML
@@ -96,6 +99,7 @@
         <button type="submit">Загрузить</button>
       </form>
       {{end}}
+      </div>
     </div>
   </div>
 </section>

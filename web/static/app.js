@@ -54,6 +54,17 @@ function mountDrawioIframe(iframe, opts) {
   };
 }
 
+async function flashErrorFrom(res) {
+  try {
+    const html = await res.text();
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const flash = doc.querySelector(".flash.error");
+    const msg = flash && flash.textContent.trim();
+    if (msg) return msg;
+  } catch (_) { /* ignore parse errors */ }
+  return res.statusText || ("ошибка " + res.status);
+}
+
 (() => {
   const forms = document.querySelectorAll("form[data-wait-title]");
   if (!forms.length) return;
@@ -124,17 +135,6 @@ function mountDrawioIframe(iframe, opts) {
     }
   }
 
-  async function errorFrom(res) {
-    try {
-      const html = await res.text();
-      const doc = new DOMParser().parseFromString(html, "text/html");
-      const flash = doc.querySelector(".flash.error");
-      const msg = flash && flash.textContent.trim();
-      if (msg) return msg;
-    } catch (_) { /* ignore parse errors */ }
-    return res.statusText || ("ошибка " + res.status);
-  }
-
   async function run(form) {
     if (busy) return;
     busy = true;
@@ -163,7 +163,7 @@ function mountDrawioIframe(iframe, opts) {
       if (!res.ok) {
         busy = false;
         if (btn) btn.disabled = false;
-        setState("failed", "Не удалось", await errorFrom(res));
+        setState("failed", "Не удалось", await flashErrorFrom(res));
         return;
       }
       setState("done", "Готово");
@@ -204,6 +204,40 @@ function mountDrawioIframe(iframe, opts) {
   const showBtn = document.getElementById("show-board");
   const assistantLabel = root.dataset.assistantLabel || "Интервьюер";
   const isLearning = root.dataset.mode === "learning";
+
+  const learningChromeIDs = ["session-actions", "learning-sidebar", "composer-wrap", "upload-wrap"];
+
+  function morphLearningChrome(newDoc) {
+    learningChromeIDs.forEach((id) => {
+      const oldEl = document.getElementById(id);
+      const newEl = newDoc.getElementById(id);
+      if (oldEl && newEl) Idiomorph.morph(oldEl, newEl);
+    });
+  }
+
+  async function refreshLearningUI() {
+    const res = await fetch(location.pathname);
+    if (!res.ok) return;
+    morphLearningChrome(new DOMParser().parseFromString(await res.text(), "text/html"));
+  }
+
+  if (isLearning) {
+    document.querySelectorAll('form[action$="/learning/hint"], form[action$="/learning/advance"]').forEach((form) => {
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const btn = form.querySelector('button[type="submit"]');
+        if (btn) btn.disabled = true;
+        const res = await fetch(form.action, { method: "POST" });
+        if (!res.ok) {
+          alert(await flashErrorFrom(res));
+          if (btn) btn.disabled = false;
+          return;
+        }
+        morphLearningChrome(new DOMParser().parseFromString(await res.text(), "text/html"));
+        if (btn) btn.disabled = false;
+      });
+    });
+  }
 
   function appendMsg(role, text) {
     const art = document.createElement("article");
@@ -318,7 +352,7 @@ function mountDrawioIframe(iframe, opts) {
         if (ev.type === "phase_advanced") phaseAdvanced = true;
         chat.scrollTop = chat.scrollHeight;
       });
-      if (phaseAdvanced) location.reload();
+      if (phaseAdvanced) await refreshLearningUI();
     });
   }
 
@@ -401,7 +435,7 @@ function mountDrawioIframe(iframe, opts) {
         if (ev.type === "phase_advanced") phaseAdvanced = true;
         chat.scrollTop = chat.scrollHeight;
       });
-      if (phaseAdvanced) location.reload();
+      if (phaseAdvanced) await refreshLearningUI();
     } catch (err) {
       appendMsg("system", (err && err.message) || "нет сети");
     } finally {
