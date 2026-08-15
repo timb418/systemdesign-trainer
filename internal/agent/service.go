@@ -2,34 +2,13 @@ package traineragent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"log"
-	"strings"
 
-	"github.com/openai/openai-go/v3/option"
-	"google.golang.org/adk/v2/agent"
-	"google.golang.org/adk/v2/agent/llmagent"
-	"google.golang.org/adk/v2/model"
-	openaimodel "google.golang.org/adk/v2/model/openaimodel"
-	"google.golang.org/adk/v2/runner"
-	"google.golang.org/adk/v2/session"
-	"google.golang.org/adk/v2/tool"
-	"google.golang.org/adk/v2/tool/functiontool"
-	"google.golang.org/genai"
+	"github.com/openai/openai-go/v3"
 
 	"github.com/timb418/systemdesign-trainer/internal/settings"
 	"github.com/timb418/systemdesign-trainer/internal/store"
 	"github.com/timb418/systemdesign-trainer/internal/tasks"
-)
-
-const (
-	appInterview = "sdt-interview"
-	appMentor    = "sdt-mentor"
-	appEval      = "sdt-eval"
-	appCompare   = "sdt-compare"
-	appSummary   = "sdt-summary"
-	localUser    = "local"
 )
 
 type Usage struct {
@@ -39,6 +18,7 @@ type Usage struct {
 }
 
 type TokenFn func(text string)
+
 type Agents struct {
 	bank *tasks.Bank
 	set  *settings.Store
@@ -48,261 +28,50 @@ func New(bank *tasks.Bank, set *settings.Store) *Agents {
 	return &Agents{bank: bank, set: set}
 }
 
-func (a *Agents) model(ctx context.Context, modelID, apiKey, effort string) (model.LLM, error) {
-	return openaimodel.NewModel(ctx, modelID, &openaimodel.ClientConfig{
-		APIKey:  apiKey,
-		BaseURL: settings.OpenRouterBaseURL,
-		Options: []option.RequestOption{
-			option.WithHeader("HTTP-Referer", "http://127.0.0.1:8080"),
-			option.WithHeader("X-Title", "System Design Trainer"),
-			option.WithJSONSet("provider", map[string]any{
-				"order":           settings.DefaultProviderOrder,
-				"allow_fallbacks": true,
-			}),
-			option.WithJSONSet("reasoning", map[string]any{
-				"effort":  settings.NormalizeReasoningEffort(effort),
-				"enabled": true,
-			}),
-		},
-	})
-}
-
-type revealIn struct {
-	Topic string `json:"topic"`
-}
-
-type revealOut struct {
-	Facts string `json:"facts"`
-}
-
-func (a *Agents) revealTool(t tasks.Task) (tool.Tool, error) {
-	return functiontool.New(functiontool.Config{
-		Name:        "reveal_facts",
-		Description: "Верни скрытые факты карточки по теме: scale, functional, nonfunctional или id правила. Вызывай, когда кандидат спросил про нагрузку, фичи или NFR. В реплике кандидату используй только пункты, которые отвечают на его вопрос; не зачитывай весь список.",
-	}, func(_ agent.Context, in revealIn) (revealOut, error) {
-		log.Printf("reveal_facts topic=%q task=%s", in.Topic, t.ID)
-		facts := t.Reveal(in.Topic)
-		if strings.Contains(facts, "нет заранее заданных фактов") {
-			log.Printf("reveal_facts: no facts for topic=%q task=%s", in.Topic, t.ID)
-		}
-		return revealOut{Facts: facts}, nil
-	})
-}
-
-func (a *Agents) interviewAgent(ctx context.Context, llm model.LLM, t tasks.Task, mode store.Mode) (agent.Agent, error) {
-	reveal, err := a.revealTool(t)
-	if err != nil {
-		return nil, err
-	}
-	temp := float32(0.7)
-	instruction := interviewerInstruction(t, mode)
-	return llmagent.New(llmagent.Config{
-		Name:        "interviewer",
-		Model:       llm,
-		Description: "Интервьюер system design",
-		Instruction: instruction,
-		Tools:       []tool.Tool{reveal},
-		GenerateContentConfig: &genai.GenerateContentConfig{
-			Temperature: &temp,
-		},
-		DisallowTransferToParent: true,
-		DisallowTransferToPeers:  true,
-	})
-}
-
-func (a *Agents) mentorAgent(ctx context.Context, llm model.LLM, t tasks.Task, blueprint tasks.LearningBlueprint, phase tasks.LearningPhase) (agent.Agent, error) {
-	reveal, err := a.revealTool(t)
-	if err != nil {
-		return nil, err
-	}
-	temp := float32(0.6)
-	return llmagent.New(llmagent.Config{
-		Name:        "mentor",
-		Model:       llm,
-		Description: "Наставник по system design",
-		Instruction: mentorInstruction(t, blueprint, phase),
-		Tools:       []tool.Tool{reveal},
-		GenerateContentConfig: &genai.GenerateContentConfig{
-			Temperature: &temp,
-		},
-		DisallowTransferToParent: true,
-		DisallowTransferToPeers:  true,
-	})
-}
-
-func (a *Agents) evalAgent(ctx context.Context, llm model.LLM) (agent.Agent, error) {
-	temp := float32(0.2)
-	return llmagent.New(llmagent.Config{
-		Name:         "evaluator",
-		Model:        llm,
-		Description:  "Оценщик рубрики",
-		Instruction:  evaluatorPrompt,
-		OutputSchema: rubricSchema(),
-		GenerateContentConfig: &genai.GenerateContentConfig{
-			Temperature: &temp,
-		},
-		DisallowTransferToParent: true,
-		DisallowTransferToPeers:  true,
-	})
-}
-
-func (a *Agents) compareAgent(ctx context.Context, llm model.LLM) (agent.Agent, error) {
-	temp := float32(0.2)
-	return llmagent.New(llmagent.Config{
-		Name:         "compare",
-		Model:        llm,
-		Description:  "Разбор отличий от эталона",
-		Instruction:  comparePrompt,
-		OutputSchema: compareSchema(),
-		GenerateContentConfig: &genai.GenerateContentConfig{
-			Temperature: &temp,
-		},
-		DisallowTransferToParent: true,
-		DisallowTransferToPeers:  true,
-	})
-}
-
-func (a *Agents) summaryAgent(ctx context.Context, llm model.LLM) (agent.Agent, error) {
-	temp := float32(0.1)
-	return llmagent.New(llmagent.Config{
-		Name:        "summarizer",
-		Model:       llm,
-		Description: "Сжатие старой части диалога",
-		Instruction: summarizerPrompt,
-		GenerateContentConfig: &genai.GenerateContentConfig{
-			Temperature: &temp,
-		},
-		DisallowTransferToParent: true,
-		DisallowTransferToPeers:  true,
-	})
-}
-
 func (a *Agents) Interview(ctx context.Context, sess store.Session, t tasks.Task, history []store.Message, userText string, onToken TokenFn) (string, Usage, error) {
-	key, err := a.set.APIKey()
+	key, cfg, err := a.keyAndSettings()
 	if err != nil {
 		return "", Usage{}, err
 	}
-	if key == "" {
-		return "", Usage{}, fmt.Errorf("нет ключа OpenRouter — укажите его в настройках")
+	client := newClient(key, cfg.ReasoningEffort)
+	params := openai.ChatCompletionNewParams{
+		Model:       cfg.InterviewerModel,
+		Messages:    buildHistory(interviewerInstruction(t, sess.Mode), history, userText),
+		Tools:       []openai.ChatCompletionToolUnionParam{revealFactsTool()},
+		Temperature: openai.Float(0.7),
 	}
-	cfg, err := a.set.Load()
-	if err != nil {
-		return "", Usage{}, err
-	}
-	llm, err := a.model(ctx, cfg.InterviewerModel, key, cfg.ReasoningEffort)
-	if err != nil {
-		return "", Usage{}, err
-	}
-	ag, err := a.interviewAgent(ctx, llm, t, sess.Mode)
-	if err != nil {
-		return "", Usage{}, err
-	}
-	sessSvc, err := hydrateChatSession(ctx, appInterview, "interviewer", sess, t, history)
-	if err != nil {
-		return "", Usage{}, err
-	}
-	r, err := runner.New(runner.Config{
-		AppName:           appInterview,
-		Agent:             ag,
-		SessionService:    sessSvc,
-		AutoCreateSession: false,
-	})
-	if err != nil {
-		return "", Usage{}, err
-	}
-	msg := genai.NewContentFromText(userText, genai.RoleUser)
-	var full strings.Builder
-	var usage Usage
-	for event, err := range r.Run(ctx, localUser, sess.ID, msg, agent.RunConfig{StreamingMode: agent.StreamingModeSSE}) {
-		if err != nil {
-			return full.String(), usage, err
-		}
-		if event == nil {
-			continue
-		}
-		appendInterviewText(&full, event, onToken)
-		if u := usageFrom(event); u.PromptTokens+u.CompletionTokens > 0 || u.Cost > 0 {
-			usage = u
-		}
-	}
-	return strings.TrimSpace(full.String()), usage, nil
+	return runToolLoop(ctx, client, params, t, onToken)
 }
 
 func (a *Agents) Mentor(ctx context.Context, sess store.Session, t tasks.Task, blueprint tasks.LearningBlueprint, phase tasks.LearningPhase, history []store.Message, userText string, onToken TokenFn) (string, Usage, error) {
-	key, err := a.set.APIKey()
+	key, cfg, err := a.keyAndSettings()
 	if err != nil {
 		return "", Usage{}, err
 	}
-	if key == "" {
-		return "", Usage{}, fmt.Errorf("нет ключа OpenRouter — укажите его в настройках")
+	client := newClient(key, cfg.ReasoningEffort)
+	params := openai.ChatCompletionNewParams{
+		Model:       cfg.InterviewerModel,
+		Messages:    buildHistory(mentorInstruction(t, blueprint, phase), history, userText),
+		Tools:       []openai.ChatCompletionToolUnionParam{revealFactsTool()},
+		Temperature: openai.Float(0.6),
 	}
-	cfg, err := a.set.Load()
-	if err != nil {
-		return "", Usage{}, err
-	}
-	llm, err := a.model(ctx, cfg.InterviewerModel, key, cfg.ReasoningEffort)
-	if err != nil {
-		return "", Usage{}, err
-	}
-	ag, err := a.mentorAgent(ctx, llm, t, blueprint, phase)
-	if err != nil {
-		return "", Usage{}, err
-	}
-	sessSvc, err := hydrateChatSession(ctx, appMentor, "mentor", sess, t, history)
-	if err != nil {
-		return "", Usage{}, err
-	}
-	r, err := runner.New(runner.Config{
-		AppName: appMentor, Agent: ag, SessionService: sessSvc, AutoCreateSession: false,
-	})
-	if err != nil {
-		return "", Usage{}, err
-	}
-	msg := genai.NewContentFromText(userText, genai.RoleUser)
-	var full strings.Builder
-	var usage Usage
-	for event, err := range r.Run(ctx, localUser, sess.ID, msg, agent.RunConfig{StreamingMode: agent.StreamingModeSSE}) {
-		if err != nil {
-			return full.String(), usage, err
-		}
-		if event == nil {
-			continue
-		}
-		appendInterviewText(&full, event, onToken)
-		if u := usageFrom(event); u.PromptTokens+u.CompletionTokens > 0 || u.Cost > 0 {
-			usage = u
-		}
-	}
-	return strings.TrimSpace(full.String()), usage, nil
+	return runToolLoop(ctx, client, params, t, onToken)
 }
 
 func (a *Agents) Evaluate(ctx context.Context, payload string) (string, Usage, error) {
-	return a.oneShot(ctx, appEval, func(ctx context.Context, llm model.LLM) (agent.Agent, error) {
-		return a.evalAgent(ctx, llm)
-	}, true, payload)
+	return a.oneShot(ctx, true, evaluatorPrompt, jsonSchemaResponseFormat("rubric", rubricSchema()), 0.2, payload)
 }
 
 func (a *Agents) Compare(ctx context.Context, payload string) (string, Usage, error) {
-	return a.oneShot(ctx, appCompare, func(ctx context.Context, llm model.LLM) (agent.Agent, error) {
-		return a.compareAgent(ctx, llm)
-	}, true, payload)
+	return a.oneShot(ctx, true, comparePrompt, jsonSchemaResponseFormat("compare", compareSchema()), 0.2, payload)
 }
 
 func (a *Agents) Summarize(ctx context.Context, payload string) (string, Usage, error) {
-	return a.oneShot(ctx, appSummary, func(ctx context.Context, llm model.LLM) (agent.Agent, error) {
-		return a.summaryAgent(ctx, llm)
-	}, false, payload)
+	return a.oneShot(ctx, false, summarizerPrompt, openai.ChatCompletionNewParamsResponseFormatUnion{}, 0.1, payload)
 }
 
-func (a *Agents) oneShot(ctx context.Context, app string, makeAgent func(context.Context, model.LLM) (agent.Agent, error), evaluator bool, payload string) (string, Usage, error) {
-	key, err := a.set.APIKey()
-	if err != nil {
-		return "", Usage{}, err
-	}
-	if key == "" {
-		return "", Usage{}, fmt.Errorf("нет ключа OpenRouter — укажите его в настройках")
-	}
-	cfg, err := a.set.Load()
+func (a *Agents) oneShot(ctx context.Context, evaluator bool, instruction string, responseFormat openai.ChatCompletionNewParamsResponseFormatUnion, temp float64, payload string) (string, Usage, error) {
+	key, cfg, err := a.keyAndSettings()
 	if err != nil {
 		return "", Usage{}, err
 	}
@@ -310,239 +79,42 @@ func (a *Agents) oneShot(ctx context.Context, app string, makeAgent func(context
 	if evaluator {
 		modelID = cfg.EvaluatorModel
 	}
-	llm, err := a.model(ctx, modelID, key, cfg.ReasoningEffort)
-	if err != nil {
-		return "", Usage{}, err
+	client := newClient(key, cfg.ReasoningEffort)
+	params := openai.ChatCompletionNewParams{
+		Model: modelID,
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(instruction),
+			openai.UserMessage(payload),
+		},
+		ResponseFormat: responseFormat,
+		Temperature:    openai.Float(temp),
 	}
-	ag, err := makeAgent(ctx, llm)
-	if err != nil {
-		return "", Usage{}, err
-	}
-	sessSvc := session.InMemoryService()
-	created, err := sessSvc.Create(ctx, &session.CreateRequest{AppName: app, UserID: localUser})
-	if err != nil {
-		return "", Usage{}, err
-	}
-	r, err := runner.New(runner.Config{AppName: app, Agent: ag, SessionService: sessSvc})
-	if err != nil {
-		return "", Usage{}, err
-	}
-	msg := genai.NewContentFromText(payload, genai.RoleUser)
-	var full strings.Builder
-	var usage Usage
-	for event, err := range r.Run(ctx, localUser, created.Session.ID(), msg, agent.RunConfig{StreamingMode: agent.StreamingModeNone}) {
-		if err != nil {
-			return full.String(), usage, err
-		}
-		if event == nil {
-			continue
-		}
-		if event.IsFinalResponse() {
-			full.WriteString(eventText(event))
-		}
-		if u := usageFrom(event); u.PromptTokens+u.CompletionTokens > 0 || u.Cost > 0 {
-			usage = u
-		}
-	}
-	return strings.TrimSpace(full.String()), usage, nil
+	return runOneShot(ctx, client, params)
 }
 
-func hydrateChatSession(ctx context.Context, appName, assistantAuthor string, sess store.Session, t tasks.Task, history []store.Message) (session.Service, error) {
-	sessSvc := session.InMemoryService()
-	created, err := sessSvc.Create(ctx, &session.CreateRequest{
-		AppName:   appName,
-		UserID:    localUser,
-		SessionID: sess.ID,
-		State:     map[string]any{"task_id": t.ID},
-	})
+func (a *Agents) keyAndSettings() (string, settings.Settings, error) {
+	key, err := a.set.APIKey()
 	if err != nil {
-		return nil, err
+		return "", settings.Settings{}, err
 	}
+	if key == "" {
+		return "", settings.Settings{}, fmt.Errorf("нет ключа OpenRouter — укажите его в настройках")
+	}
+	cfg, err := a.set.Load()
+	if err != nil {
+		return "", settings.Settings{}, err
+	}
+	return key, cfg, nil
+}
+
+func buildHistory(instruction string, history []store.Message, userText string) []openai.ChatCompletionMessageParamUnion {
+	msgs := []openai.ChatCompletionMessageParamUnion{openai.SystemMessage(instruction)}
 	for _, m := range history {
-		ev := session.NewEvent(ctx, "hydrate")
-		var role genai.Role = genai.RoleUser
-		ev.Author = "user"
 		if m.Role == "assistant" {
-			role = genai.RoleModel
-			ev.Author = assistantAuthor
-		}
-		ev.LLMResponse.Content = genai.NewContentFromText(m.Content, role)
-		if err := sessSvc.AppendEvent(ctx, created.Session, ev); err != nil {
-			return nil, err
+			msgs = append(msgs, openai.AssistantMessage(m.Content))
+		} else {
+			msgs = append(msgs, openai.UserMessage(m.Content))
 		}
 	}
-	return sessSvc, nil
-}
-
-func appendInterviewText(full *strings.Builder, event *session.Event, onToken TokenFn) {
-	if event == nil {
-		return
-	}
-	if hasToolParts(event) {
-		full.Reset()
-		return
-	}
-	text := eventText(event)
-	if text == "" {
-		return
-	}
-	if event.Partial {
-		full.WriteString(text)
-		if onToken != nil {
-			onToken(text)
-		}
-		return
-	}
-	if event.IsFinalResponse() && full.Len() == 0 {
-		full.WriteString(text)
-		if onToken != nil {
-			onToken(text)
-		}
-	}
-}
-
-func hasToolParts(e *session.Event) bool {
-	if e == nil || e.Content == nil {
-		return false
-	}
-	for _, p := range e.Content.Parts {
-		if p == nil {
-			continue
-		}
-		if p.FunctionCall != nil || p.FunctionResponse != nil {
-			return true
-		}
-	}
-	return false
-}
-
-func eventText(e *session.Event) string {
-	if e == nil || e.Content == nil {
-		return ""
-	}
-	var b strings.Builder
-	for _, p := range e.Content.Parts {
-		if p == nil || p.Thought || p.FunctionCall != nil || p.FunctionResponse != nil {
-			continue
-		}
-		b.WriteString(p.Text)
-	}
-	return b.String()
-}
-
-func usageFrom(e *session.Event) Usage {
-	var u Usage
-	if e == nil || e.UsageMetadata == nil {
-		return u
-	}
-	m := e.UsageMetadata
-	u.PromptTokens = int(m.PromptTokenCount)
-	u.CompletionTokens = int(m.CandidatesTokenCount)
-	if u.CompletionTokens == 0 && m.TotalTokenCount > 0 {
-		u.CompletionTokens = int(m.TotalTokenCount) - u.PromptTokens
-	}
-	if e.CustomMetadata != nil {
-		if c, ok := e.CustomMetadata["cost"]; ok {
-			switch v := c.(type) {
-			case float64:
-				u.Cost = v
-			case json.Number:
-				u.Cost, _ = v.Float64()
-			}
-		}
-	}
-	return u
-}
-
-func interviewerInstruction(t tasks.Task, mode store.Mode) string {
-	s := interviewerPrompt
-	s = strings.ReplaceAll(s, "{{mode}}", mode.Label())
-	s = strings.ReplaceAll(s, "{{difficulty}}", fmt.Sprintf("%d", t.Difficulty))
-	s = strings.ReplaceAll(s, "{{arch}}", strings.Join(t.ArchitectureTypes, ", "))
-	var rules strings.Builder
-	rules.WriteString("\n\nКогда вызывать reveal_facts:\n")
-	for _, r := range t.RevealOnQuestion {
-		rules.WriteString("- topic=")
-		rules.WriteString(r.ID)
-		rules.WriteString(" если речь про: ")
-		rules.WriteString(strings.Join(r.Keywords, ", "))
-		rules.WriteByte('\n')
-	}
-	switch mode {
-	case store.ModeRequirements:
-		s += "\nСейчас режим только уточнения требований. Не требуй схему. Когда кандидат зафиксировал scope — коротко подведи и остановись."
-	case store.ModeDrill:
-		s += "\nРежим практики паттерна: уже фокус на паттерне этого типа. Deep dive уже и короче, в «фирменное» узкое место."
-	}
-	return s + rules.String()
-}
-
-func mentorInstruction(t tasks.Task, blueprint tasks.LearningBlueprint, phase tasks.LearningPhase) string {
-	s := mentorPrompt
-	replacements := map[string]string{
-		"{{phase_title}}": phase.Title,
-		"{{phase_goal}}":  phase.Goal,
-		"{{task_title}}":  t.Title,
-		"{{difficulty}}":  fmt.Sprintf("%d", t.Difficulty),
-		"{{objectives}}":  bulletList(blueprint.Objectives),
-		"{{concepts}}":    conceptList(blueprint.Concepts),
-	}
-	for old, value := range replacements {
-		s = strings.ReplaceAll(s, old, value)
-	}
-	var rules strings.Builder
-	rules.WriteString("\n\nДоступные темы reveal_facts:\n")
-	for _, rule := range t.RevealOnQuestion {
-		fmt.Fprintf(&rules, "- %s: %s\n", rule.ID, strings.Join(rule.Keywords, ", "))
-	}
-	return s + rules.String()
-}
-
-func bulletList(items []string) string {
-	if len(items) == 0 {
-		return "- Общая практика этапа."
-	}
-	var b strings.Builder
-	for _, item := range items {
-		fmt.Fprintf(&b, "- %s\n", item)
-	}
-	return strings.TrimSpace(b.String())
-}
-
-func conceptList(concepts []tasks.Concept) string {
-	var lines []string
-	for _, concept := range concepts {
-		lines = append(lines, fmt.Sprintf("- %s: %s", concept.Title, concept.Summary))
-	}
-	return strings.Join(lines, "\n")
-}
-
-func rubricSchema() *genai.Schema {
-	crit := &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"id":      {Type: genai.TypeString, Description: "requirements|scale|hld|bottlenecks|reliability|tradeoffs|communication"},
-			"level":   {Type: genai.TypeString, Description: "weak|ok|strong|n_a"},
-			"comment": {Type: genai.TypeString},
-		},
-		Required: []string{"id", "level", "comment"},
-	}
-	return &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"criteria": {Type: genai.TypeArray, Items: crit},
-		},
-		Required: []string{"criteria"},
-	}
-}
-
-func compareSchema() *genai.Schema {
-	return &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"narrative": {Type: genai.TypeString},
-			"points":    {Type: genai.TypeArray, Items: &genai.Schema{Type: genai.TypeString}},
-		},
-		Required: []string{"narrative", "points"},
-	}
+	return append(msgs, openai.UserMessage(userText))
 }
