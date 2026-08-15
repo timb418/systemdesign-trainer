@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sort"
@@ -30,6 +31,13 @@ type learningPhaseView struct {
 	Current    bool
 	Completed  bool
 	Assistance string
+	Forced     bool
+	Notes      string
+}
+
+type forcedPhaseView struct {
+	Title string
+	Notes string
 }
 
 type conceptMasteryView struct {
@@ -178,7 +186,7 @@ func (s *Server) showLearningSession(w http.ResponseWriter, r *http.Request, ses
 		s.fail(w, 500, err.Error())
 		return
 	}
-	assistance, _ := s.store.LearningPhaseAssistance(r.Context(), sess.ID)
+	results, _ := s.store.LearningPhaseResults(r.Context(), sess.ID)
 	currentIndex := len(blueprint.Phases)
 	var current tasks.LearningPhase
 	var phases []learningPhaseView
@@ -187,9 +195,11 @@ func (s *Server) showLearningSession(w http.ResponseWriter, r *http.Request, ses
 			currentIndex = i
 			current = phase
 		}
+		res := results[phase.ID]
 		phases = append(phases, learningPhaseView{
 			LearningPhase: phase, Current: phase.ID == state.Phase,
-			Completed: assistance[phase.ID] != "", Assistance: assistance[phase.ID],
+			Completed: res.Assistance != "", Assistance: res.Assistance,
+			Forced: res.Forced, Notes: res.Notes,
 		})
 	}
 	hint := ""
@@ -206,13 +216,13 @@ func (s *Server) showLearningSession(w http.ResponseWriter, r *http.Request, ses
 		"Title": task.Title, "Session": sess, "Task": task.Public(), "Messages": messages,
 		"DrawioURL": s.drawio, "HasKey": s.set.HasAPIKey(), "Blueprint": blueprint,
 		"State": state, "CurrentPhase": current, "Phases": phases, "Hint": hint,
-		"CanHint":      currentIndex < len(blueprint.Phases) && state.HintLevel < len(current.Hints),
+		"CanHint":      currentIndex < len(blueprint.Phases),
 		"GoldUnlocked": state.Phase == "complete",
 	})
 }
 
 func (s *Server) learningHint(w http.ResponseWriter, r *http.Request) {
-	sess, blueprint, state, phase, ok := s.learningRequest(w, r)
+	sess, _, state, phase, ok := s.learningRequest(w, r)
 	if !ok {
 		return
 	}
@@ -220,23 +230,21 @@ func (s *Server) learningHint(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, 400, "обучение уже завершено")
 		return
 	}
-	next, err := s.store.IncreaseLearningHint(r.Context(), sess.ID, len(phase.Hints))
+	next, err := s.store.IncreaseLearningHint(r.Context(), sess.ID)
 	if err != nil {
 		s.fail(w, 500, err.Error())
 		return
 	}
-	if next.HintLevel > state.HintLevel && next.HintLevel <= len(phase.Hints) {
-		_, _ = s.store.AddMessage(r.Context(), store.Message{
-			SessionID: sess.ID, Role: "system",
-			Content: fmt.Sprintf("Подсказка %d/%d: %s", next.HintLevel, len(phase.Hints), phase.Hints[next.HintLevel-1]),
-		})
+	content := "Заготовленные подсказки закончились — сформулируйте конкретный вопрос наставнику в чате, и он подскажет дальше."
+	if next.HintLevel <= len(phase.Hints) {
+		content = fmt.Sprintf("Подсказка %d/%d: %s", next.HintLevel, len(phase.Hints), phase.Hints[next.HintLevel-1])
 	}
-	_ = blueprint
+	_, _ = s.store.AddMessage(r.Context(), store.Message{SessionID: sess.ID, Role: "system", Content: content})
 	http.Redirect(w, r, "/sessions/"+sess.ID, http.StatusSeeOther)
 }
 
 func (s *Server) learningAdvance(w http.ResponseWriter, r *http.Request) {
-	sess, blueprint, state, _, ok := s.learningRequest(w, r)
+	sess, blueprint, state, phase, ok := s.learningRequest(w, r)
 	if !ok {
 		return
 	}
@@ -249,16 +257,31 @@ func (s *Server) learningAdvance(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, 400, "сначала сделайте попытку в чате или покажите схему")
 		return
 	}
+	t, ok := s.bank.Get(sess.TaskID)
+	if !ok {
+		s.fail(w, 404, "нет задачи")
+		return
+	}
+	forced, notes := s.checkPhaseCompletion(r.Context(), t, blueprint, phase, state, messages)
+	if err := s.advancePhase(r.Context(), sess, blueprint, state.Phase, forced, notes); err != nil {
+		s.fail(w, 400, err.Error())
+		return
+	}
+	http.Redirect(w, r, "/sessions/"+sess.ID, http.StatusSeeOther)
+}
+
+// advancePhase moves the session to the next blueprint phase (or "complete" past the last
+// one), recording whether the transition was forced (see checkPhaseCompletion).
+func (s *Server) advancePhase(ctx context.Context, sess store.Session, blueprint tasks.LearningBlueprint, currentPhase string, forced bool, notes string) error {
 	index := -1
 	for i, phase := range blueprint.Phases {
-		if phase.ID == state.Phase {
+		if phase.ID == currentPhase {
 			index = i
 			break
 		}
 	}
 	if index < 0 {
-		s.fail(w, 400, "неизвестный учебный этап")
-		return
+		return fmt.Errorf("неизвестный учебный этап")
 	}
 	next := "complete"
 	nextMessage := "Рефлексия завершена. Теперь можно завершить сессию и открыть эталонный разбор."
@@ -267,12 +290,39 @@ func (s *Server) learningAdvance(w http.ResponseWriter, r *http.Request) {
 		next = nextPhase.ID
 		nextMessage = fmt.Sprintf("Учебный этап: %s\nЦель: %s", nextPhase.Title, nextPhase.Goal)
 	}
-	if err := s.store.AdvanceLearningPhase(r.Context(), sess.ID, state.Phase, next); err != nil {
-		s.fail(w, 400, err.Error())
-		return
+	if err := s.store.AdvanceLearningPhase(ctx, sess.ID, currentPhase, next, forced, notes); err != nil {
+		return err
 	}
-	_, _ = s.store.AddMessage(r.Context(), store.Message{SessionID: sess.ID, Role: "system", Content: nextMessage})
-	http.Redirect(w, r, "/sessions/"+sess.ID, http.StatusSeeOther)
+	_, _ = s.store.AddMessage(ctx, store.Message{SessionID: sess.ID, Role: "system", Content: nextMessage})
+	return nil
+}
+
+// checkPhaseCompletion asks the LLM whether the current phase's goal was actually met by
+// the conversation since the phase started. It fails open: if the check itself errors (no
+// API key, network issue, unparsable response), the phase is treated as forced/incomplete
+// so a manual "Этап готов" click still gets the candidate unstuck, with the reason recorded.
+func (s *Server) checkPhaseCompletion(ctx context.Context, t tasks.Task, blueprint tasks.LearningBlueprint, phase tasks.LearningPhase, state store.LearningState, messages []store.Message) (forced bool, notes string) {
+	payload := buildPhaseCheckPayload(t, blueprint, phase, state.HintLevel, messagesSincePhaseStart(messages))
+	raw, _, err := s.agents.CheckPhaseCompletion(ctx, payload)
+	if err != nil {
+		return true, "Автоматическая проверка недоступна: " + err.Error()
+	}
+	var parsed struct {
+		Complete bool     `json:"complete"`
+		Missing  []string `json:"missing"`
+		Feedback string   `json:"feedback"`
+	}
+	if err := json.Unmarshal([]byte(extractJSON(raw)), &parsed); err != nil {
+		return true, "Не удалось разобрать ответ проверки этапа."
+	}
+	if parsed.Complete {
+		return false, ""
+	}
+	notes = strings.TrimSpace(parsed.Feedback)
+	if len(parsed.Missing) > 0 {
+		notes = strings.TrimSpace(notes + "\nНе хватает: " + strings.Join(parsed.Missing, "; "))
+	}
+	return true, notes
 }
 
 func (s *Server) learningRequest(w http.ResponseWriter, r *http.Request) (store.Session, tasks.LearningBlueprint, store.LearningState, tasks.LearningPhase, bool) {
@@ -309,16 +359,26 @@ func learningPhase(blueprint tasks.LearningBlueprint, id string) (tasks.Learning
 }
 
 func hasLearningAttempt(messages []store.Message) bool {
-	for i := len(messages) - 1; i >= 0; i-- {
-		message := messages[i]
-		if message.Role == "system" && strings.HasPrefix(message.Content, "Учебный этап:") {
-			return false
-		}
-		if message.Role == "user" {
+	for _, m := range messagesSincePhaseStart(messages) {
+		if m.Role == "user" {
 			return true
 		}
 	}
 	return false
+}
+
+// messagesSincePhaseStart returns the tail of messages after the most recent
+// "Учебный этап:" marker (written by advancePhase), or the whole slice if the
+// session is still in its first phase.
+func messagesSincePhaseStart(messages []store.Message) []store.Message {
+	start := 0
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "system" && strings.HasPrefix(messages[i].Content, "Учебный этап:") {
+			start = i + 1
+			break
+		}
+	}
+	return messages[start:]
 }
 
 func learningIntro(task tasks.Task, blueprint tasks.LearningBlueprint) string {

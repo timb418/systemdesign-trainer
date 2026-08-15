@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -121,6 +122,12 @@ type LearningState struct {
 	UpdatedAt time.Time
 }
 
+type LearningPhaseResult struct {
+	Assistance string
+	Forced     bool
+	Notes      string
+}
+
 type LearningProgress struct {
 	TaskID          string
 	SessionID       string
@@ -209,10 +216,28 @@ CREATE TABLE IF NOT EXISTS learning_phase_results (
   phase TEXT NOT NULL,
   assistance TEXT NOT NULL,
   completed_at TEXT NOT NULL,
+  forced INTEGER NOT NULL DEFAULT 0,
+  notes TEXT NOT NULL DEFAULT '',
   PRIMARY KEY (session_id, phase)
 );
 `)
-	return err
+	if err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(s.db, "learning_phase_results", "forced", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	return addColumnIfMissing(s.db, "learning_phase_results", "notes", "TEXT NOT NULL DEFAULT ''")
+}
+
+// addColumnIfMissing runs an additive ALTER TABLE for databases created before this column
+// existed; CREATE TABLE IF NOT EXISTS above only covers brand-new databases.
+func addColumnIfMissing(db *sql.DB, table, column, ddl string) error {
+	_, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, ddl))
+	if err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
+	return nil
 }
 
 func (s *Store) CreateSession(ctx context.Context, taskID string, mode Mode, timerEnabled bool, timerMinutes int) (Session, error) {
@@ -350,23 +375,21 @@ FROM learning_states WHERE session_id = ?`, sessionID).Scan(
 	return state, nil
 }
 
-func (s *Store) IncreaseLearningHint(ctx context.Context, sessionID string, max int) (LearningState, error) {
-	if max < 0 {
-		max = 0
-	}
+func (s *Store) IncreaseLearningHint(ctx context.Context, sessionID string) (LearningState, error) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err := s.db.ExecContext(ctx, `
-UPDATE learning_states
-SET hint_level = CASE WHEN hint_level < ? THEN hint_level + 1 ELSE hint_level END,
-    updated_at = ?
-WHERE session_id = ?`, max, now, sessionID)
+UPDATE learning_states SET hint_level = hint_level + 1, updated_at = ? WHERE session_id = ?`,
+		now, sessionID)
 	if err != nil {
 		return LearningState{}, err
 	}
 	return s.GetLearningState(ctx, sessionID)
 }
 
-func (s *Store) AdvanceLearningPhase(ctx context.Context, sessionID, current, next string) error {
+// AdvanceLearningPhase moves the session from current to next, recording how much help
+// was used (derived from hint_level) plus whether the transition was forced without the
+// LLM completion check confirming the phase's goal was met (see forced/notes).
+func (s *Store) AdvanceLearningPhase(ctx context.Context, sessionID, current, next string, forced bool, notes string) error {
 	state, err := s.GetLearningState(ctx, sessionID)
 	if err != nil {
 		return err
@@ -388,11 +411,12 @@ func (s *Store) AdvanceLearningPhase(ctx context.Context, sessionID, current, ne
 	}
 	defer tx.Rollback()
 	if _, err := tx.ExecContext(ctx, `
-INSERT INTO learning_phase_results (session_id, phase, assistance, completed_at)
-VALUES (?, ?, ?, ?)
+INSERT INTO learning_phase_results (session_id, phase, assistance, completed_at, forced, notes)
+VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT(session_id, phase) DO UPDATE SET
-  assistance = excluded.assistance, completed_at = excluded.completed_at`,
-		sessionID, current, assistance, now); err != nil {
+  assistance = excluded.assistance, completed_at = excluded.completed_at,
+  forced = excluded.forced, notes = excluded.notes`,
+		sessionID, current, assistance, now, boolInt(forced), notes); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `
@@ -433,19 +457,32 @@ ORDER BY ls.updated_at DESC`, ModeLearning)
 }
 
 func (s *Store) LearningPhaseAssistance(ctx context.Context, sessionID string) (map[string]string, error) {
+	results, err := s.LearningPhaseResults(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for phase, r := range results {
+		out[phase] = r.Assistance
+	}
+	return out, nil
+}
+
+func (s *Store) LearningPhaseResults(ctx context.Context, sessionID string) (map[string]LearningPhaseResult, error) {
 	rows, err := s.db.QueryContext(ctx, `
-SELECT phase, assistance FROM learning_phase_results WHERE session_id = ?`, sessionID)
+SELECT phase, assistance, forced, notes FROM learning_phase_results WHERE session_id = ?`, sessionID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := map[string]string{}
+	out := map[string]LearningPhaseResult{}
 	for rows.Next() {
-		var phase, assistance string
-		if err := rows.Scan(&phase, &assistance); err != nil {
+		var phase, assistance, notes string
+		var forced int
+		if err := rows.Scan(&phase, &assistance, &forced, &notes); err != nil {
 			return nil, err
 		}
-		out[phase] = assistance
+		out[phase] = LearningPhaseResult{Assistance: assistance, Forced: forced != 0, Notes: notes}
 	}
 	return out, rows.Err()
 }

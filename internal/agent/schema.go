@@ -27,6 +27,18 @@ func rubricSchema() map[string]any {
 	}
 }
 
+func phaseCheckSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"complete": map[string]any{"type": "boolean"},
+			"missing":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"feedback": map[string]any{"type": "string"},
+		},
+		"required": []string{"complete", "missing", "feedback"},
+	}
+}
+
 func compareSchema() map[string]any {
 	return map[string]any{
 		"type": "object",

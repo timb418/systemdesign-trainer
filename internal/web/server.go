@@ -415,23 +415,28 @@ func (s *Server) streamConversation(ctx context.Context, writeEvt func(any), ses
 	var text string
 	var usage traineragent.Usage
 	var err error
+	var learningBlueprint tasks.LearningBlueprint
+	var learningState store.LearningState
+	var learningPhaseVal tasks.LearningPhase
 	history, compactionUsage := s.compactConversationHistory(ctx, sess.ID, history)
 	onToken := func(tok string) {
 		writeEvt(map[string]any{"type": "token", "text": tok})
 	}
 	if sess.Mode == store.ModeLearning {
-		blueprint, _ := s.bank.LearningBlueprint(t.ID)
-		state, stateErr := s.store.GetLearningState(ctx, sess.ID)
+		learningBlueprint, _ = s.bank.LearningBlueprint(t.ID)
+		var stateErr error
+		learningState, stateErr = s.store.GetLearningState(ctx, sess.ID)
 		if stateErr != nil {
 			writeEvt(map[string]any{"type": "error", "message": stateErr.Error()})
 			return
 		}
-		phase, ok := learningPhase(blueprint, state.Phase)
+		var ok bool
+		learningPhaseVal, ok = learningPhase(learningBlueprint, learningState.Phase)
 		if !ok {
 			writeEvt(map[string]any{"type": "error", "message": "обучение завершено"})
 			return
 		}
-		text, usage, err = s.agents.Mentor(ctx, sess, t, blueprint, phase, history, userText, onToken)
+		text, usage, err = s.agents.Mentor(ctx, sess, t, learningBlueprint, learningPhaseVal, history, userText, onToken)
 	} else {
 		text, usage, err = s.agents.Interview(ctx, sess, t, history, userText, onToken)
 	}
@@ -454,6 +459,15 @@ func (s *Server) streamConversation(ctx context.Context, writeEvt func(any), ses
 		CompletionTokens: usage.CompletionTokens,
 		Cost:             usage.Cost,
 	})
+	if sess.Mode == store.ModeLearning {
+		messages, _ := s.store.ListMessages(ctx, sess.ID)
+		forced, _ := s.checkPhaseCompletion(ctx, t, learningBlueprint, learningPhaseVal, learningState, messages)
+		if !forced {
+			if err := s.advancePhase(ctx, sess, learningBlueprint, learningState.Phase, false, ""); err == nil {
+				writeEvt(map[string]any{"type": "phase_advanced"})
+			}
+		}
+	}
 	updated, _ := s.store.GetSession(ctx, sess.ID)
 	writeEvt(map[string]any{"type": "usage", "label": usageLabel(updated)})
 }
@@ -674,7 +688,14 @@ func (s *Server) compare(w http.ResponseWriter, r *http.Request) {
 		blueprint, _ := s.bank.LearningBlueprint(orig.TaskID)
 		view["Concepts"] = blueprint.Concepts
 		view["CommonMistakes"] = blueprint.CommonMistakes
-		view["Assistance"], _ = s.store.LearningPhaseAssistance(r.Context(), orig.ID)
+		results, _ := s.store.LearningPhaseResults(r.Context(), orig.ID)
+		var forcedPhases []forcedPhaseView
+		for _, phase := range blueprint.Phases {
+			if res, ok := results[phase.ID]; ok && res.Forced {
+				forcedPhases = append(forcedPhases, forcedPhaseView{Title: phase.Title, Notes: res.Notes})
+			}
+		}
+		view["ForcedPhases"] = forcedPhases
 	}
 	s.render(w, "compare.html", view)
 }

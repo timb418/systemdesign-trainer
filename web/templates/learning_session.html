@@ -28,7 +28,7 @@
         {{range .Phases}}
         <li class="{{if .Current}}current{{else if .Completed}}completed{{end}}">
           <span>{{.Title}}</span>
-          {{if .Completed}}<small>{{if eq .Assistance "independent"}}самостоятельно{{else if eq .Assistance "hinted"}}с подсказкой{{else}}с объяснением{{end}}</small>{{end}}
+          {{if .Completed}}<small>{{if eq .Assistance "independent"}}самостоятельно{{else if eq .Assistance "hinted"}}с подсказкой{{else}}с объяснением{{end}}{{if .Forced}} · принудительно{{end}}</small>{{end}}
         </li>
         {{end}}
       </ol>
@@ -47,6 +47,7 @@
             <button type="submit">Этап готов</button>
           </form>
         </div>
+        <p class="hint-note">Этап переключится сам, как только цель будет закрыта. Кнопку можно нажать и раньше — если критерий ещё не выполнен, это будет отмечено как принудительный переход.</p>
       </div>
       {{else}}
       <div class="phase-card">

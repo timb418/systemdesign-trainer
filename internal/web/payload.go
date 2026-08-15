@@ -123,6 +123,21 @@ func buildEvalPayload(sess store.Session, t tasks.Task, msgs []store.Message, to
 	return b.String()
 }
 
+func buildPhaseCheckPayload(t tasks.Task, blueprint tasks.LearningBlueprint, phase tasks.LearningPhase, hintLevel int, msgs []store.Message) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Задача: %s\nСложность: %d\n\n", t.Title, t.Difficulty)
+	fmt.Fprintf(&b, "Текущий этап: %s\nЦель этапа: %s\nИспользовано подсказок этого этапа: %d\n\n", phase.Title, phase.Goal, hintLevel)
+	b.WriteString("Учебные цели задачи целиком (для контекста, не требуй всё сразу):\n")
+	for _, o := range blueprint.Objectives {
+		b.WriteString("- ")
+		b.WriteString(o)
+		b.WriteByte('\n')
+	}
+	b.WriteString("\nПереписка с начала этого этапа:\n")
+	writeRelevantTranscript(&b, msgs)
+	return b.String()
+}
+
 func buildComparePayload(t tasks.Task, msgs []store.Message, topo diagram.Topology) string {
 	var b strings.Builder
 	b.WriteString("Эталонный нарратив:\n")

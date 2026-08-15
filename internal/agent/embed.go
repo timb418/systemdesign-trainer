@@ -14,5 +14,8 @@ var comparePrompt string
 //go:embed prompts/mentor.md
 var mentorPrompt string
 
+//go:embed prompts/phase_check.md
+var phaseCheckPrompt string
+
 //go:embed prompts/summarizer.md
 var summarizerPrompt string

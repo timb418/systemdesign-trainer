@@ -43,6 +43,12 @@
     <h3>Типичные ловушки этой задачи</h3>
     <ul>{{range .CommonMistakes}}<li>{{.}}</li>{{end}}</ul>
     {{end}}
+    {{if .ForcedPhases}}
+    <h3>Пройдено принудительно, без подтверждённого критерия</h3>
+    <ul>
+      {{range .ForcedPhases}}<li><strong>{{.Title}}:</strong> {{.Notes}}</li>{{end}}
+    </ul>
+    {{end}}
     <p><a class="btn" href="/learn">Вернуться к учебному треку</a></p>
   </section>
   {{end}}

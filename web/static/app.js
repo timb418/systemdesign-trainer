@@ -308,14 +308,17 @@ function mountDrawioIframe(iframe, opts) {
         body.textContent = "Ошибка отправки.";
         return;
       }
+      let phaseAdvanced = false;
       await readSSE(res, (ev) => {
         if (ev.type === "token") body.textContent += ev.text;
         if (ev.type === "usage" && usageEl) {
           usageEl.textContent = ev.label || "";
         }
         if (ev.type === "error") body.textContent += "\n" + ev.message;
+        if (ev.type === "phase_advanced") phaseAdvanced = true;
         chat.scrollTop = chat.scrollHeight;
       });
+      if (phaseAdvanced) location.reload();
     });
   }
 
@@ -379,6 +382,7 @@ function mountDrawioIframe(iframe, opts) {
         return;
       }
       let assistantBody = null;
+      let phaseAdvanced = false;
       await readSSE(res, (ev) => {
         if (ev.type === "shown") {
           appendBoardEvent(ev.dump, ev.nodes, ev.edges);
@@ -394,8 +398,10 @@ function mountDrawioIframe(iframe, opts) {
           if (!assistantBody) assistantBody = appendMsg("assistant", "");
           assistantBody.textContent += (assistantBody.textContent ? "\n" : "") + ev.message;
         }
+        if (ev.type === "phase_advanced") phaseAdvanced = true;
         chat.scrollTop = chat.scrollHeight;
       });
+      if (phaseAdvanced) location.reload();
     } catch (err) {
       appendMsg("system", (err && err.message) || "нет сети");
     } finally {

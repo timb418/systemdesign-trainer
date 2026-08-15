@@ -128,11 +128,17 @@ func TestLearningProgressRoundtrip(t *testing.T) {
 	if err := st.CreateLearningState(ctx, sess.ID, "orientation"); err != nil {
 		t.Fatal(err)
 	}
-	state, err := st.IncreaseLearningHint(ctx, sess.ID, 4)
-	if err != nil || state.HintLevel != 1 {
-		t.Fatalf("hint state %+v err=%v", state, err)
+	var state store.LearningState
+	for i := 0; i < 5; i++ {
+		state, err = st.IncreaseLearningHint(ctx, sess.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := st.AdvanceLearningPhase(ctx, sess.ID, "orientation", "requirements"); err != nil {
+	if state.HintLevel != 5 {
+		t.Fatalf("hints should be uncapped, got %+v", state)
+	}
+	if err := st.AdvanceLearningPhase(ctx, sess.ID, "orientation", "requirements", false, ""); err != nil {
 		t.Fatal(err)
 	}
 	state, err = st.GetLearningState(ctx, sess.ID)
@@ -140,15 +146,28 @@ func TestLearningProgressRoundtrip(t *testing.T) {
 		t.Fatalf("advanced state %+v err=%v", state, err)
 	}
 	assistance, err := st.LearningPhaseAssistance(ctx, sess.ID)
-	if err != nil || assistance["orientation"] != "hinted" {
+	if err != nil || assistance["orientation"] != "explained" {
 		t.Fatalf("assistance %+v err=%v", assistance, err)
+	}
+	if err := st.AdvanceLearningPhase(ctx, sess.ID, "requirements", "scale", true, "не хватило нагрузки"); err != nil {
+		t.Fatal(err)
+	}
+	results, err := st.LearningPhaseResults(ctx, sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := results["requirements"]; !got.Forced || got.Notes != "не хватило нагрузки" {
+		t.Fatalf("forced phase result %+v", got)
+	}
+	if got := results["orientation"]; got.Forced {
+		t.Fatalf("orientation should not be forced: %+v", got)
 	}
 	progress, err := st.LearningProgress(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := progress["url-shortener-v1"]
-	if got.SessionID != sess.ID || got.CurrentPhase != "requirements" || got.CompletedPhases != 1 {
+	if got.SessionID != sess.ID || got.CurrentPhase != "scale" || got.CompletedPhases != 2 {
 		t.Fatalf("progress %+v", got)
 	}
 }

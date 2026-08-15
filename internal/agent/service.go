@@ -66,6 +66,10 @@ func (a *Agents) Compare(ctx context.Context, payload string) (string, Usage, er
 	return a.oneShot(ctx, true, comparePrompt, jsonSchemaResponseFormat("compare", compareSchema()), 0.2, payload)
 }
 
+func (a *Agents) CheckPhaseCompletion(ctx context.Context, payload string) (string, Usage, error) {
+	return a.oneShot(ctx, true, phaseCheckPrompt, jsonSchemaResponseFormat("phase_check", phaseCheckSchema()), 0.2, payload)
+}
+
 func (a *Agents) Summarize(ctx context.Context, payload string) (string, Usage, error) {
 	return a.oneShot(ctx, false, summarizerPrompt, openai.ChatCompletionNewParamsResponseFormatUnion{}, 0.1, payload)
 }

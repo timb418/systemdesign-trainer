@@ -407,10 +407,15 @@ func TestLearningModeProgressiveDisclosure(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, _ = io.Copy(io.Discard, advance.Body)
+		advancedPage, _ := io.ReadAll(advance.Body)
 		advance.Body.Close()
 		if advance.StatusCode != http.StatusOK {
 			t.Fatalf("phase %d advance status %d", phase, advance.StatusCode)
+		}
+		// Without an API key the phase-completion check fails open (forced=true),
+		// so the sidebar must mark the just-completed phase as forced.
+		if !strings.Contains(string(advancedPage), "принудительно") {
+			t.Fatalf("phase %d advance missing forced marker: %s", phase, advancedPage)
 		}
 	}
 
@@ -421,5 +426,10 @@ func TestLearningModeProgressiveDisclosure(t *testing.T) {
 	hub, _ = io.ReadAll(mustGet(t, client, ts.URL+"/learn"))
 	if !strings.Contains(string(hub), "этапов 6/6") {
 		t.Fatalf("learning completion missing from hub: %s", hub)
+	}
+
+	comparePage, _ := io.ReadAll(mustGet(t, client, ts.URL+sessionPath+"/compare"))
+	if !strings.Contains(string(comparePage), "Пройдено принудительно") {
+		t.Fatalf("compare page missing forced-phase summary: %s", comparePage)
 	}
 }
